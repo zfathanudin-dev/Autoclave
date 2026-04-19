@@ -463,27 +463,55 @@ jobs:
               }
               override fun onServiceConnected() {
                   prefs = getSharedPreferences("WordClickerPrefs", Context.MODE_PRIVATE)
-                  loadConfig()
-                  registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
+
+                  handler.postDelayed({
+                     loadConfig()
                   log("✅ Service aktif")
+                  }, 500)
+
+                  registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
               }
               override fun onDestroy() { try { unregisterReceiver(configReceiver) } catch (_: Exception) {}; log("🛑 Service berhenti") }
               override fun onInterrupt() {}
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-                  if (event == null || isProcessing) return
-                  val ev = setOf(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED)
-                  if (event.eventType !in ev) return
-                  val enabled = wordList.filter { it.enabled }
-                  if (enabled.isEmpty()) return
-                  isProcessing = true
-                  handler.post {
+                  try {
+                     if (event == null || isProcessing) return
+
+                     val ev = setOf(
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED
+                  )
+
+                     if (event.eventType !in ev) return
+
+                     val enabled = wordList.filter { it.enabled }
+                     if (enabled.isEmpty()) return
+
+                     val root = rootInActiveWindow ?: return
+
+                           isProcessing = true
+
+              handler.post {
                       try {
-                          val root = rootInActiveWindow ?: return@post
-                          if (clickMode == ClickMode.PRIORITY) scanPriority(root, enabled) else scanAll(root, enabled)
-                          root.recycle()
-                      } finally { handler.postDelayed({ isProcessing = false }, prefs.getInt("delay_ms", 500).toLong()) }
-                  }
+                          if (clickMode == ClickMode.PRIORITY)
+                            scanPriority(root, enabled)
+                     else
+                            scanAll(root, enabled)
+                   } catch (e: Exception) {
+                          e.printStackTrace()
+                   } finally {
+                          try { root.recycle() } catch (_: Exception) {}
+                handler.postDelayed({
+                          isProcessing = false
+                  }, prefs.getInt("delay_ms", 500).toLong())
               }
+          }
+
+                 } catch (e: Exception) {
+                    e.printStackTrace()
+               }
+           }
               private fun scanPriority(root: AccessibilityNodeInfo, targets: List<WordConfig>) {
                   for ((i, cfg) in targets.withIndex()) {
                       val nodes = root.findAccessibilityNodeInfosByText(cfg.word) ?: continue
@@ -512,13 +540,19 @@ jobs:
                   if (cfg.clickOnWord) click(cx, cy + prefs.getInt("offset_on_word", 0))
               }
               private fun click(x: Float, y: Float) {
-                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
-                  val p = Path().apply { moveTo(x, y) }
-                  val g = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p, 0, 50)).build()
-                  dispatchGesture(g, object : GestureResultCallback() {
-                      override fun onCompleted(g: GestureDescription) { log("✔️ Klik (${"%.0f".format(x)}, ${"%.0f".format(y)})") }
-                  }, null)
-              }
+                 try {
+                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+
+                     val p = Path().apply { moveTo(x, y) }
+                     val g = GestureDescription.Builder()
+                     .addStroke(GestureDescription.StrokeDescription(p, 0, 50))
+                     .build()
+
+                  dispatchGesture(g, null, null)
+                     } catch (e: Exception) {
+                        e.printStackTrace()
+                 }
+            }
               private fun loadConfig() {
                   clickMode = if (prefs.getString("click_mode","PRIORITY") == "PRIORITY") ClickMode.PRIORITY else ClickMode.CLICK_ALL
                   wordList.clear()
