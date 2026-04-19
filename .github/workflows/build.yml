@@ -367,7 +367,9 @@ jobs:
         run: |
           cat > app/src/main/res/layout/item_word.xml << 'ENDOFFILE'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <LinearLayout 
+             xmlns:android="http://schemas.android.com/apk/res/android"
+             xmlns:app="http://schemas.android.com/apk/res-auto"
               android:layout_width="match_parent" android:layout_height="wrap_content"
               android:orientation="vertical" android:background="#222336"
               android:padding="12dp" android:layout_marginBottom="8dp">
@@ -382,18 +384,18 @@ jobs:
               <ImageButton android:id="@+id/btnMoveUp" android:layout_width="28dp" android:layout_height="28dp"
                   android:src="@android:drawable/arrow_up_float"
                   android:background="?attr/selectableItemBackgroundBorderless"
-                  android:imageTintList="@android:color/white"/>
+                  app:tint="@android:color/white"/>
               <ImageButton android:id="@+id/btnMoveDown" android:layout_width="28dp" android:layout_height="28dp"
                   android:src="@android:drawable/arrow_down_float"
                   android:background="?attr/selectableItemBackgroundBorderless"
-                  android:imageTintList="@android:color/white"/>
+                  app:tint="@android:color/white"/>
               <Switch android:id="@+id/switchEnabled" android:layout_width="wrap_content"
                   android:layout_height="wrap_content" android:thumbTint="#5B5FEF"
                   android:trackTint="#333355" android:layout_marginStart="4dp"/>
               <ImageButton android:id="@+id/btnDeleteWord" android:layout_width="28dp" android:layout_height="28dp"
                   android:src="@android:drawable/ic_delete"
                   android:background="?attr/selectableItemBackgroundBorderless"
-                  android:imageTintList="@android:color/holo_red_light" android:layout_marginStart="2dp"/>
+                  app:tint="@android:color/holo_red_light" android:layout_marginStart="2dp"/>
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="8dp">
