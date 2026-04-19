@@ -287,12 +287,12 @@ jobs:
 
               override fun onServiceConnected() {
                   instance = this
-                  ScreenCaptureService.log("✅ Accessibility aktif")
+                  ScreenCaptureService.log("Accessibility aktif")
               }
 
               override fun onDestroy() {
                   instance = null
-                  ScreenCaptureService.log("🛑 Accessibility berhenti")
+                  ScreenCaptureService.log("Accessibility berhenti")
               }
 
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -320,6 +320,7 @@ jobs:
           import com.google.mlkit.vision.text.TextRecognition
           import com.google.mlkit.vision.text.latin.TextRecognizerOptions
           import org.json.JSONArray
+          import org.json.JSONObject
           import java.text.SimpleDateFormat
           import java.util.*
           import kotlin.random.Random
@@ -333,7 +334,7 @@ jobs:
 
                   fun log(msg: String) {
                       val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-                      val logMsg = "[$time] $msg"
+                      val logMsg = "[" + time + "] " + msg
                       logCallback?.invoke(logMsg)
                       android.util.Log.d("GrowtopiaClicker", msg)
                   }
@@ -364,7 +365,7 @@ jobs:
               private val configReceiver = object : BroadcastReceiver() {
                   override fun onReceive(ctx: Context?, intent: Intent?) {
                       loadConfig()
-                      log("⚙️ Config diperbarui")
+                      log("Config diperbarui")
                   }
               }
 
@@ -425,7 +426,7 @@ jobs:
 
                   isRunning = true
                   isScanning = false
-                  log("📷 Scan dimulai (${screenWidth}x${screenHeight})")
+                  log("Scan dimulai (" + screenWidth + "x" + screenHeight + ")")
                   scheduleNextScan()
               }
 
@@ -440,7 +441,7 @@ jobs:
                   mediaProjection = null
                   stopForeground(STOP_FOREGROUND_REMOVE)
                   stopSelf()
-                  log("⏹ Scan dihentikan")
+                  log("Scan dihentikan")
               }
 
               private fun scheduleNextScan() {
@@ -491,14 +492,14 @@ jobs:
                               }
                           }
                           .addOnFailureListener { e ->
-                              log("❌ OCR error: ${e.message}")
+                              log("OCR error: " + e.message)
                               cropped.recycle()
                               isScanning = false
                               scheduleNextScan()
                           }
                   } catch (e: Exception) {
                       try { image.close() } catch (_: Exception) {}
-                      log("❌ Error: ${e.message}")
+                      log("Error: " + e.message)
                       isScanning = false
                       scheduleNextScan()
                   }
@@ -527,7 +528,7 @@ jobs:
                                           cfg.offsetY > 0 -> "di BAWAH"
                                           else -> "PADA"
                                       }
-                                      log("🔍 ${cfg.itemName} $posDesc (${cx.toInt()}, ${clickY.toInt()}) [teks: $detectedText]")
+                                      log(cfg.itemName + " " + posDesc + " (" + cx.toInt() + ", " + clickY.toInt() + ") [teks: " + detectedText + "]")
                                   }
                               }
                           }
@@ -537,7 +538,7 @@ jobs:
                   if (found.isEmpty()) return
 
                   if (!ClickerAccessibilityService.isAvailable()) {
-                      log("⚠️ Accessibility belum aktif!")
+                      log("Accessibility belum aktif!")
                       return
                   }
 
@@ -549,20 +550,20 @@ jobs:
                               best.config.offsetY > 0 -> "bawah"
                               else -> "pada"
                           }
-                          log("🏆 Klik ${best.config.itemName} $posDesc")
+                          log("Klik " + best.config.itemName + " " + posDesc)
                           ClickerAccessibilityService.performClick(best.cx, best.cy, best.config.randomDelay) {
-                              log("✅ Klik sukses")
+                              log("Klik sukses")
                           }
                       }
                       ClickMode.CLICK_ALL -> {
-                          val sorted = found.sortedBy { it.priority }.distinctBy { "${it.cx.toInt()},${it.cy.toInt()}" }
+                          val sorted = found.sortedBy { it.priority }.distinctBy { "" + it.cx.toInt() + "," + it.cy.toInt() }
                           for (f in sorted.take(4)) {
                               val posDesc = when {
                                   f.config.offsetY < 0 -> "atas"
                                   f.config.offsetY > 0 -> "bawah"
                                   else -> "pada"
                               }
-                              log("🖱️ Klik ${f.config.itemName} $posDesc")
+                              log("Klik " + f.config.itemName + " " + posDesc)
                               ClickerAccessibilityService.performClick(f.cx, f.cy, f.config.randomDelay)
                               Thread.sleep(Random.nextLong(250, 500))
                           }
@@ -577,20 +578,29 @@ jobs:
                   antiBanMode = prefs.getBoolean("anti_ban_mode", true)
                   itemList.clear()
                   
-                  val defaultItems = "[{\"itemName\":\"Diamond Lock\",\"enabled\":true,\"offsetY\":-60,\"priority\":0},{\"itemName\":\"World Lock\",\"enabled\":true,\"offsetY\":-55,\"priority\":1},{\"itemName\":\"Fossil\",\"enabled\":false,\"offsetY\":50,\"priority\":2}]"
-                  val arr = JSONArray(prefs.getString("item_list", defaultItems) ?: defaultItems)
-                  
-                  for (i in 0 until arr.length()) {
-                      val o = arr.getJSONObject(i)
-                      itemList.add(ItemConfig(
-                          itemName = o.getString("itemName"),
-                          enabled = o.optBoolean("enabled", true),
-                          offsetY = o.optInt("offsetY", -60),
-                          priority = o.optInt("priority", i),
-                          randomDelay = o.optBoolean("randomDelay", true)
-                      ))
+                  val jsonStr = prefs.getString("item_list", "")
+                  if (jsonStr.isNullOrEmpty()) {
+                      itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
+                      itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                  } else {
+                      try {
+                          val arr = JSONArray(jsonStr)
+                          for (i in 0 until arr.length()) {
+                              val o = arr.getJSONObject(i)
+                              itemList.add(ItemConfig(
+                                  itemName = o.getString("itemName"),
+                                  enabled = o.optBoolean("enabled", true),
+                                  offsetY = o.optInt("offsetY", -60),
+                                  priority = o.optInt("priority", i),
+                                  randomDelay = o.optBoolean("randomDelay", true)
+                              ))
+                          }
+                      } catch (e: Exception) {
+                          itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
+                          itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                      }
                   }
-                  log("📋 ${itemList.count { it.enabled }} item, interval: ${scanIntervalMs}ms")
+                  log(itemList.count { it.enabled }.toString() + " item, interval: " + scanIntervalMs + "ms")
               }
 
               private fun buildNotification(): Notification {
@@ -655,7 +665,7 @@ jobs:
 
               override fun onBindViewHolder(h: VH, pos: Int) {
                   val item = items[pos]
-                  h.tvPriority.text = "#${pos + 1}"
+                  h.tvPriority.text = "#" + (pos + 1)
                   h.tvItem.text = item.itemName
                   h.swEnabled.isChecked = item.enabled
                   
@@ -663,11 +673,11 @@ jobs:
                   h.seekOffset.progress = progress.coerceIn(0, 400)
                   
                   val posText = when {
-                      item.offsetY < 0 -> "di ATAS ${kotlin.math.abs(item.offsetY)}px"
-                      item.offsetY > 0 -> "di BAWAH ${item.offsetY}px"
+                      item.offsetY < 0 -> "di ATAS " + kotlin.math.abs(item.offsetY) + "px"
+                      item.offsetY > 0 -> "di BAWAH " + item.offsetY + "px"
                       else -> "PADA teks"
                   }
-                  h.tvOffset.text = "Klik $posText"
+                  h.tvOffset.text = "Klik " + posText
                   
                   h.btnUp.alpha = if (pos == 0) 0.3f else 1f
                   h.btnDn.alpha = if (pos == items.size - 1) 0.3f else 1f
@@ -681,11 +691,11 @@ jobs:
                       override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
                           val offset = v - 200
                           val posDesc = when {
-                              offset < 0 -> "di ATAS ${kotlin.math.abs(offset)}px"
-                              offset > 0 -> "di BAWAH ${offset}px"
+                              offset < 0 -> "di ATAS " + kotlin.math.abs(offset) + "px"
+                              offset > 0 -> "di BAWAH " + offset + "px"
                               else -> "PADA teks"
                           }
-                          h.tvOffset.text = "Klik $posDesc"
+                          h.tvOffset.text = "Klik " + posDesc
                           if (u) items[h.adapterPosition] = items[h.adapterPosition].copy(offsetY = offset)
                       }
                       override fun onStartTrackingTouch(s: SeekBar?) {}
@@ -741,6 +751,7 @@ jobs:
           import androidx.recyclerview.widget.LinearLayoutManager
           import androidx.recyclerview.widget.RecyclerView
           import org.json.JSONArray
+          import org.json.JSONObject
 
           class MainActivity : AppCompatActivity() {
 
@@ -837,27 +848,37 @@ jobs:
                   else 
                       rbAll.isChecked = true
                   
-                  val defaultItems = "[{\"itemName\":\"Diamond Lock\",\"enabled\":true,\"offsetY\":-60,\"priority\":0},{\"itemName\":\"World Lock\",\"enabled\":true,\"offsetY\":-55,\"priority\":1},{\"itemName\":\"Fossil\",\"enabled\":false,\"offsetY\":50,\"priority\":2}]"
-                  val arr = JSONArray(prefs.getString("item_list", defaultItems) ?: defaultItems)
+                  val jsonStr = prefs.getString("item_list", "")
                   itemList.clear()
                   
-                  for (i in 0 until arr.length()) {
-                      val o = arr.getJSONObject(i)
-                      itemList.add(ItemConfig(
-                          itemName = o.getString("itemName"),
-                          enabled = o.optBoolean("enabled", true),
-                          offsetY = o.optInt("offsetY", -60),
-                          priority = o.optInt("priority", i),
-                          randomDelay = o.optBoolean("randomDelay", true)
-                      ))
+                  if (jsonStr.isNullOrEmpty()) {
+                      itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
+                      itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                  } else {
+                      try {
+                          val arr = JSONArray(jsonStr)
+                          for (i in 0 until arr.length()) {
+                              val o = arr.getJSONObject(i)
+                              itemList.add(ItemConfig(
+                                  itemName = o.getString("itemName"),
+                                  enabled = o.optBoolean("enabled", true),
+                                  offsetY = o.optInt("offsetY", -60),
+                                  priority = o.optInt("priority", i),
+                                  randomDelay = o.optBoolean("randomDelay", true)
+                              ))
+                          }
+                      } catch (e: Exception) {
+                          itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
+                          itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                      }
                   }
               }
 
               private fun updateOffsetText(progress: Int) {
                   val offset = progress - 200
                   val text = when {
-                      offset < 0 -> "Klik di ATAS teks ${kotlin.math.abs(offset)}px"
-                      offset > 0 -> "Klik di BAWAH teks ${offset}px"
+                      offset < 0 -> "Klik di ATAS teks " + kotlin.math.abs(offset) + "px"
+                      offset > 0 -> "Klik di BAWAH teks " + offset + "px"
                       else -> "Klik PADA teks (0px)"
                   }
                   tvOffset.text = text
@@ -866,7 +887,7 @@ jobs:
               private fun saveSettings() {
                   val arr = JSONArray()
                   for ((i, w) in itemList.withIndex()) {
-                      val o = org.json.JSONObject()
+                      val o = JSONObject()
                       o.put("itemName", w.itemName)
                       o.put("enabled", w.enabled)
                       o.put("offsetY", w.offsetY)
@@ -915,7 +936,7 @@ jobs:
                   }
 
                   btnAdd.setOnClickListener {
-                      val name = etItem.text.toString().trim()
+                      val name = etItem.text.toString().trim().replace(" ", "_")
                       if (name.isEmpty()) { 
                           etItem.error = "Masukkan nama item"
                           return@setOnClickListener 
@@ -1006,7 +1027,7 @@ jobs:
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 1 — Accessibility Service" android:textColor="#00C853"
+                      android:text="STEP 1 - Accessibility Service" android:textColor="#00C853"
                       android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical">
@@ -1029,7 +1050,7 @@ jobs:
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 2 — Screen Capture" android:textColor="#00C853"
+                      android:text="STEP 2 - Screen Capture" android:textColor="#00C853"
                       android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical">
@@ -1057,10 +1078,10 @@ jobs:
                   <RadioGroup android:id="@+id/rgClickMode" android:layout_width="match_parent"
                       android:layout_height="wrap_content" android:orientation="vertical">
                     <RadioButton android:id="@+id/rbPriority" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Prioritas — item urutan teratas"
+                        android:layout_height="wrap_content" android:text="Prioritas - item urutan teratas"
                         android:textColor="#FFFFFF" android:textSize="13sp" android:checked="true" android:buttonTint="#00C853"/>
                     <RadioButton android:id="@+id/rbClickAll" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Klik Semua — semua item terdeteksi"
+                        android:layout_height="wrap_content" android:text="Klik Semua - semua item terdeteksi"
                         android:textColor="#FFFFFF" android:textSize="13sp" android:buttonTint="#00C853"/>
                   </RadioGroup>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -1083,7 +1104,7 @@ jobs:
                       android:text="Tambah Item Baru" android:textColor="#00C853"
                       android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
                   <EditText android:id="@+id/etNewWord" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:hint="Nama item (contoh: Diamond Lock)"
+                      android:layout_height="wrap_content" android:hint="Nama item (contoh: Diamond_Lock)"
                       android:textColor="#FFFFFF" android:textColorHint="#666666" android:inputType="text"/>
                   
                   <TextView android:id="@+id/tvOffsetAbove" android:layout_width="wrap_content"
@@ -1189,14 +1210,14 @@ jobs:
               <TextView android:id="@+id/tvWord" android:layout_width="0dp" android:layout_height="wrap_content"
                   android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold"/>
               <Button android:id="@+id/btnMoveUp" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="↑" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp"/>
+                  android:text="^" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp"/>
               <Button android:id="@+id/btnMoveDown" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="↓" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp" android:layout_marginStart="4dp"/>
+                  android:text="v" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp" android:layout_marginStart="4dp"/>
               <Switch android:id="@+id/switchEnabled" android:layout_width="wrap_content"
                   android:layout_height="wrap_content" android:layout_marginStart="4dp"/>
               <Button android:id="@+id/btnDeleteWord" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="×" android:textColor="#FF4444" android:backgroundTint="#331111"
-                  android:textSize="16sp" android:padding="0dp" android:layout_marginStart="4dp"/>
+                  android:text="x" android:textColor="#FF4444" android:backgroundTint="#331111"
+                  android:textSize="14sp" android:padding="0dp" android:layout_marginStart="4dp"/>
             </LinearLayout>
             <TextView android:id="@+id/tvItemOffset" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:text="Klik di ATAS teks 60px"
