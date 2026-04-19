@@ -1,4 +1,4 @@
-name: Build APK Growtopia AutoClicker
+name: Build AutoClicker APK
 
 on:
   push:
@@ -16,8 +16,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-    
-      - name: Buat folder struktur
+
+      - name: Buat folder
         run: |
           mkdir -p app/src/main/java/com/wordclicker
           mkdir -p app/src/main/res/layout
@@ -36,7 +36,7 @@ jobs:
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google(); mavenCentral() }
           }
-          rootProject.name = "GrowtopiaClicker"
+          rootProject.name = "AutoClicker"
           include ':app'
           EOF
 
@@ -54,7 +54,7 @@ jobs:
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8
+          org.gradle.jvmargs=-Xmx2048m
           EOF
 
       - name: gradle-wrapper.properties
@@ -77,79 +77,59 @@ jobs:
           android {
               namespace 'com.wordclicker'
               compileSdk 34
-              
               defaultConfig {
                   applicationId "com.wordclicker"
                   minSdk 24
                   targetSdk 34
-                  versionCode 7
-                  versionName "7.0-FixCrash"
+                  versionCode 8
+                  versionName "8.0"
               }
-              
               buildTypes {
-                  release { 
-                      minifyEnabled false
-                      shrinkResources false
-                  }
-                  debug {
-                      debuggable true
-                      minifyEnabled false
-                  }
+                  debug { debuggable true }
+                  release { minifyEnabled false }
               }
-              
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              
-              kotlinOptions { 
-                  jvmTarget = '17' 
-              }
+              kotlinOptions { jvmTarget = '17' }
           }
-          
           dependencies {
               implementation 'androidx.core:core-ktx:1.10.1'
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
               implementation 'androidx.cardview:cardview:1.0.0'
               implementation 'androidx.recyclerview:recyclerview:1.3.1'
+              implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
           }
           EOF
 
-      - name: AndroidManifest.xml - FIXED EXPORTED
+      - name: AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools"
               package="com.wordclicker">
-
               <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
                   tools:ignore="ProtectedPermissions"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-                  android:enabled="true">
-
-                  <activity 
-                      android:name=".MainActivity" 
-                      android:exported="true"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true"
                       android:screenOrientation="portrait">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
-
-                  <!-- FIX: AccessibilityService HARUS exported=true karena di-bind system -->
                   <service
-                      android:name="com.wordclicker.ClickerAccessibilityService"
+                      android:name=".ClickerAccessibilityService"
                       android:enabled="true"
                       android:exported="true"
                       android:label="@string/accessibility_service_label"
@@ -161,13 +141,11 @@ jobs:
                           android:name="android.accessibilityservice"
                           android:resource="@xml/accessibility_service_config"/>
                   </service>
-
                   <service
-                      android:name="com.wordclicker.ScreenCaptureService"
+                      android:name=".ScreenCaptureService"
                       android:enabled="true"
                       android:exported="false"
                       android:foregroundServiceType="mediaProjection"/>
-
               </application>
           </manifest>
           EOF
@@ -177,9 +155,9 @@ jobs:
           cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">Growtopia AutoClicker</string>
-              <string name="accessibility_service_label">Growtopia AutoClicker</string>
-              <string name="accessibility_service_description">Auto click untuk Growtopia dengan deteksi teks item</string>
+              <string name="app_name">Word Auto Clicker</string>
+              <string name="accessibility_service_label">Word Auto Clicker</string>
+              <string name="accessibility_service_description">Auto klik berdasarkan deteksi teks di layar</string>
           </resources>
           EOF
 
@@ -190,7 +168,6 @@ jobs:
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
               android:accessibilityEventTypes="typeAllMask"
               android:accessibilityFeedbackType="feedbackGeneric"
-              android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
               android:canPerformGestures="true"
               android:canRetrieveWindowContent="true"
               android:notificationTimeout="100"
@@ -206,7 +183,6 @@ jobs:
               <size android:width="12dp" android:height="12dp"/>
           </shape>
           EOF
-          
           cat > app/src/main/res/drawable/badge_priority.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
@@ -215,1052 +191,909 @@ jobs:
           </shape>
           EOF
 
-      - name: Generate Kotlin & XML files
+      - name: Tulis semua file via Python
         run: |
           python3 << 'PYEOF'
           import os
 
           files = {}
 
-          # === ItemConfig.kt ===
-          files["app/src/main/java/com/wordclicker/ItemConfig.kt"] = '''
-          package com.wordclicker
-
-          data class ItemConfig(
-              val itemName: String,
-              val enabled: Boolean = true,
-              val offsetY: Int = -60,
-              val priority: Int = 0,
-              val randomDelay: Boolean = true
-          ) {
-              fun getClickPosition(textCenterY: Float): Float {
-                  return textCenterY + offsetY
-              }
-          }
-
-          enum class ClickMode { PRIORITY, CLICK_ALL }
-          '''
-
-          # === ClickerAccessibilityService.kt - SIMPLIFIED ===
-          files["app/src/main/java/com/wordclicker/ClickerAccessibilityService.kt"] = '''
-          package com.wordclicker
-
-          import android.accessibilityservice.AccessibilityService
-          import android.accessibilityservice.GestureDescription
-          import android.graphics.Path
-          import android.os.Build
-          import android.view.accessibility.AccessibilityEvent
-          import kotlin.random.Random
-
-          class ClickerAccessibilityService : AccessibilityService() {
-
-              companion object {
-                  var instance: ClickerAccessibilityService? = null
-                  var lastClickTime = 0L
-                  const val MIN_CLICK_INTERVAL = 150
-
-                  fun performClick(x: Float, y: Float, randomDelay: Boolean = true, onDone: (() -> Unit)? = null) {
-                      val svc = instance ?: return
-                      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
-                      
-                      val now = System.currentTimeMillis()
-                      val timeSinceLast = now - lastClickTime
-                      
-                      val extraDelay = if (randomDelay) Random.nextLong(50, 200) else 0
-                      val totalDelay = if (timeSinceLast < MIN_CLICK_INTERVAL) {
-                          MIN_CLICK_INTERVAL - timeSinceLast + extraDelay
-                      } else extraDelay
-                      
-                      android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                          try {
-                              val path = Path().apply { moveTo(x, y) }
-                              val stroke = GestureDescription.StrokeDescription(path, 0, Random.nextLong(40, 80))
-                              val gesture = GestureDescription.Builder().addStroke(stroke).build()
-                              
-                              svc.dispatchGesture(gesture, object : GestureResultCallback() {
-                                  override fun onCompleted(g: GestureDescription) { 
-                                      lastClickTime = System.currentTimeMillis()
-                                      onDone?.invoke() 
-                                  }
-                                  override fun onCancelled(g: GestureDescription) {}
-                              }, null)
-                          } catch (e: Exception) {}
-                      }, totalDelay)
-                  }
-
-                  fun isAvailable() = instance != null
-              }
-
-              override fun onServiceConnected() {
-                  super.onServiceConnected()
-                  instance = this
-                  android.util.Log.d("GrowtopiaClicker", "Accessibility Service Connected")
-              }
-
-              override fun onDestroy() {
-                  instance = null
-                  super.onDestroy()
-              }
-
-              override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-              override fun onInterrupt() {}
-          }
-          '''
-
-          # === ScreenCaptureService.kt ===
-          files["app/src/main/java/com/wordclicker/ScreenCaptureService.kt"] = '''
-          package com.wordclicker
-
-          import android.app.*
-          import android.content.*
-          import android.graphics.*
-          import android.hardware.display.DisplayManager
-          import android.hardware.display.VirtualDisplay
-          import android.media.ImageReader
-          import android.media.projection.MediaProjection
-          import android.media.projection.MediaProjectionManager
-          import android.os.*
-          import android.util.DisplayMetrics
-          import android.view.WindowManager
-          import androidx.core.app.NotificationCompat
-          import android.text.TextUtils
-          import org.json.JSONArray
-          import org.json.JSONObject
-          import java.text.SimpleDateFormat
-          import java.util.*
-          import kotlin.random.Random
-
-          class ScreenCaptureService : Service() {
-
-              companion object {
-                  var instance: ScreenCaptureService? = null
-                  var logCallback: ((String) -> Unit)? = null
-                  var isRunning = false
-
-                  fun log(msg: String) {
-                      val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-                      val logMsg = "[" + time + "] " + msg
-                      logCallback?.invoke(logMsg)
-                      android.util.Log.d("GrowtopiaClicker", msg)
-                  }
-
-                  const val ACTION_START = "START"
-                  const val ACTION_STOP = "STOP"
-                  const val EXTRA_RESULT_CODE = "RESULT_CODE"
-                  const val EXTRA_RESULT_DATA = "RESULT_DATA"
-                  const val CHANNEL_ID = "GrowtopiaClickerChannel"
-              }
-
-              private var mediaProjection: MediaProjection? = null
-              private var virtualDisplay: VirtualDisplay? = null
-              private var imageReader: ImageReader? = null
-              private val handler = Handler(Looper.getMainLooper())
-              private var screenWidth = 1080
-              private var screenHeight = 1920
-              private var screenDensity = 1
-
-              private var isScanning = false
-              private var itemList = mutableListOf<ItemConfig>()
-              private var clickMode = ClickMode.PRIORITY
-              private var scanIntervalMs = 1200L
-              private var antiBanMode = true
-
-              private val configReceiver = object : BroadcastReceiver() {
-                  override fun onReceive(ctx: Context?, intent: Intent?) {
-                      loadConfig()
-                      log("Config updated")
-                  }
-              }
-
-              override fun onCreate() {
-                  super.onCreate()
-                  instance = this
-                  createNotificationChannel()
-                  loadConfig()
-                  
-                  val filter = IntentFilter("com.wordclicker.UPDATE_CONFIG")
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                      registerReceiver(configReceiver, filter, RECEIVER_NOT_EXPORTED)
-                  } else {
-                      registerReceiver(configReceiver, filter)
-                  }
-              }
-
-              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-                  when (intent?.action) {
-                      ACTION_START -> {
-                          val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
-                          val resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                              intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
-                          else @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_RESULT_DATA)
-                          if (resultData != null) startCapture(resultCode, resultData)
-                      }
-                      ACTION_STOP -> stopCapture()
-                  }
-                  return START_STICKY
-              }
-
-              private fun startCapture(resultCode: Int, resultData: Intent) {
-                  startForeground(1, buildNotification())
-
-                  val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                  val metrics = DisplayMetrics()
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      val bounds = wm.currentWindowMetrics.bounds
-                      screenWidth = bounds.width()
-                      screenHeight = bounds.height()
-                      screenDensity = resources.displayMetrics.densityDpi
-                  } else {
-                      @Suppress("DEPRECATION") wm.defaultDisplay.getMetrics(metrics)
-                      screenWidth = metrics.widthPixels
-                      screenHeight = metrics.heightPixels
-                      screenDensity = metrics.densityDpi
-                  }
-
-                  val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                  mediaProjection = mpm.getMediaProjection(resultCode, resultData)
-
-                  imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
-                  virtualDisplay = mediaProjection?.createVirtualDisplay(
-                      "GrowtopiaCapture",
-                      screenWidth, screenHeight, screenDensity,
-                      DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                      imageReader?.surface, null, null
-                  )
-
-                  isRunning = true
-                  isScanning = false
-                  log("Scan started (" + screenWidth + "x" + screenHeight + ")")
-                  scheduleNextScan()
-              }
-
-              private fun stopCapture() {
-                  isRunning = false
-                  handler.removeCallbacksAndMessages(null)
-                  virtualDisplay?.release()
-                  imageReader?.close()
-                  mediaProjection?.stop()
-                  virtualDisplay = null
-                  imageReader = null
-                  mediaProjection = null
-                  stopForeground(STOP_FOREGROUND_REMOVE)
-                  stopSelf()
-                  log("Scan stopped")
-              }
-
-              private fun scheduleNextScan() {
-                  if (!isRunning) return
-                  val delay = if (antiBanMode) scanIntervalMs + Random.nextLong(-200, 300) else scanIntervalMs
-                  handler.postDelayed({
-                      if (isRunning && !isScanning) doScan()
-                      else scheduleNextScan()
-                  }, delay.coerceAtLeast(400))
-              }
-
-              private fun doScan() {
-                  val reader = imageReader ?: run { scheduleNextScan(); return }
-                  val image = reader.acquireLatestImage() ?: run { scheduleNextScan(); return }
-
-                  isScanning = true
-                  try {
-                      val planes = image.planes[0]
-                      val buffer = planes.buffer
-                      val pixelStride = planes.pixelStride
-                      val rowStride = planes.rowStride
-                      val rowPadding = rowStride - pixelStride * screenWidth
-                      val bitmap = Bitmap.createBitmap(
-                          screenWidth + rowPadding / pixelStride,
-                          screenHeight, Bitmap.Config.ARGB_8888
-                      )
-                      bitmap.copyPixelsFromBuffer(buffer)
-                      image.close()
-
-                      val cropped = Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight)
-                      bitmap.recycle()
-
-                      val inputImage = InputImage.fromBitmap(cropped, 0)
-                      val enabled = itemList.filter { it.enabled }
-
-                      if (enabled.isEmpty()) {
-                          cropped.recycle(); isScanning = false; scheduleNextScan(); return
-                      }
-
-                      recognizer.process(inputImage)
-                          .addOnSuccessListener { result ->
-                              try {
-                                  processOcrResult(result, enabled)
-                              } finally {
-                                  cropped.recycle()
-                                  isScanning = false
-                                  scheduleNextScan()
-                              }
-                          }
-                          .addOnFailureListener { e ->
-                              log("OCR error: " + e.message)
-                              cropped.recycle()
-                              isScanning = false
-                              scheduleNextScan()
-                          }
-                  } catch (e: Exception) {
-                      try { image.close() } catch (_: Exception) {}
-                      log("Capture error: " + e.message)
-                      isScanning = false
-                      scheduleNextScan()
-                  }
-              }
-
-              private fun processOcrResult(result: com.google.mlkit.vision.text.Text, targets: List<ItemConfig>) {
-                  data class Found(val config: ItemConfig, val cx: Float, val cy: Float, val textY: Float, val priority: Int)
-                  val found = mutableListOf<Found>()
-
-                  for (block in result.textBlocks) {
-                      for (line in block.lines) {
-                          val detectedText = line.text.trim()
-                          
-                          for ((priority, cfg) in targets.withIndex()) {
-                              if (detectedText.contains(cfg.itemName, ignoreCase = true)) {
-                                  val box = line.boundingBox ?: continue
-                                  val cx = box.centerX().toFloat()
-                                  val textCenterY = box.centerY().toFloat()
-                                  val clickY = cfg.getClickPosition(textCenterY)
-                                  
-                                  if (clickY > 50 && clickY < screenHeight - 50 && cx > 50 && cx < screenWidth - 50) {
-                                      found.add(Found(cfg, cx, clickY, textCenterY, priority))
-                                      
-                                      val posDesc = when {
-                                          cfg.offsetY < 0 -> "ABOVE"
-                                          cfg.offsetY > 0 -> "BELOW"
-                                          else -> "ON"
-                                      }
-                                      log(cfg.itemName + " " + posDesc + " (" + cx.toInt() + "," + clickY.toInt() + ") [" + detectedText + "]")
-                                  }
-                              }
-                          }
-                      }
-                  }
-
-                  if (found.isEmpty()) return
-
-                  if (!ClickerAccessibilityService.isAvailable()) {
-                      log("WARNING: Accessibility not available!")
-                      return
-                  }
-
-                  when (clickMode) {
-                      ClickMode.PRIORITY -> {
-                          val best = found.minByOrNull { it.priority } ?: return
-                          val posDesc = when {
-                              best.config.offsetY < 0 -> "above"
-                              best.config.offsetY > 0 -> "below"
-                              else -> "on"
-                          }
-                          log("Click " + best.config.itemName + " " + posDesc)
-                          ClickerAccessibilityService.performClick(best.cx, best.cy, best.config.randomDelay) {
-                              log("Click success")
-                          }
-                      }
-                      ClickMode.CLICK_ALL -> {
-                          val sorted = found.sortedBy { it.priority }.distinctBy { "" + it.cx.toInt() + "," + it.cy.toInt() }
-                          for (f in sorted.take(4)) {
-                              val posDesc = when {
-                                  f.config.offsetY < 0 -> "above"
-                                  f.config.offsetY > 0 -> "below"
-                                  else -> "on"
-                              }
-                              log("Click " + f.config.itemName + " " + posDesc)
-                              ClickerAccessibilityService.performClick(f.cx, f.cy, f.config.randomDelay)
-                              Thread.sleep(Random.nextLong(250, 500))
-                          }
-                      }
-                  }
-              }
-
-              private fun loadConfig() {
-                  val prefs = getSharedPreferences("GrowtopiaClickerPrefs", Context.MODE_PRIVATE)
-                  clickMode = if (prefs.getString("click_mode", "PRIORITY") == "PRIORITY") ClickMode.PRIORITY else ClickMode.CLICK_ALL
-                  scanIntervalMs = prefs.getInt("scan_interval_ms", 1200).toLong()
-                  antiBanMode = prefs.getBoolean("anti_ban_mode", true)
-                  itemList.clear()
-                  
-                  val jsonStr = prefs.getString("item_list", "")
-                  if (jsonStr.isNullOrEmpty()) {
-                      itemList.add(ItemConfig("Clamp", true, -40, 0))
-                      itemList.add(ItemConfig("Transfusion", true, -40, 1))
-                      itemList.add(ItemConfig("Scalpel", true, -40, 2))
-                      itemList.add(ItemConfig("Stitches", true, -40, 3))
-                      itemList.add(ItemConfig("Ultrasound", true, -40, 4))
-                      itemList.add(ItemConfig("Anesthetic", true, -40, 5))
-                      itemList.add(ItemConfig("Defibrillator", true, -40, 6))
-                      itemList.add(ItemConfig("Splint", true, -40, 7))
-                      itemList.add(ItemConfig("Pin", true, -40, 8))
-                  } else {
-                      try {
-                          val arr = JSONArray(jsonStr)
-                          for (i in 0 until arr.length()) {
-                              val o = arr.getJSONObject(i)
-                              itemList.add(ItemConfig(
-                                  itemName = o.getString("itemName"),
-                                  enabled = o.optBoolean("enabled", true),
-                                  offsetY = o.optInt("offsetY", -40),
-                                  priority = o.optInt("priority", i),
-                                  randomDelay = o.optBoolean("randomDelay", true)
-                              ))
-                          }
-                      } catch (e: Exception) {
-                          itemList.add(ItemConfig("Clamp", true, -40, 0))
-                      }
-                  }
-                  log(itemList.count { it.enabled }.toString() + " items loaded")
-              }
-
-              private fun buildNotification(): Notification {
-                  return NotificationCompat.Builder(this, CHANNEL_ID)
-                      .setContentTitle("Growtopia AutoClicker")
-                      .setContentText("Scanning for items...")
-                      .setSmallIcon(android.R.drawable.ic_menu_search)
-                      .setPriority(NotificationCompat.PRIORITY_LOW)
-                      .setOngoing(true)
-                      .build()
-              }
-
-              private fun createNotificationChannel() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      val ch = NotificationChannel(CHANNEL_ID, "Growtopia Clicker", NotificationManager.IMPORTANCE_LOW)
-                      ch.setShowBadge(false)
-                      (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
-                  }
-              }
-
-              override fun onBind(intent: Intent?) = null
-
-              override fun onDestroy() {
-                  instance = null
-                  isRunning = false
-                  try { unregisterReceiver(configReceiver) } catch (_: Exception) {}
-                  recognizer.close()
-                  super.onDestroy()
-              }
-          }
-          '''
-
-          # === ItemListAdapter.kt ===
-          files["app/src/main/java/com/wordclicker/ItemListAdapter.kt"] = '''
-          package com.wordclicker
-
-          import android.view.LayoutInflater
-          import android.view.View
-          import android.view.ViewGroup
-          import android.widget.*
-          import androidx.recyclerview.widget.RecyclerView
-
-          class ItemListAdapter(
-              private val items: MutableList<ItemConfig>,
-              private val onDelete: (Int) -> Unit,
-              private val onChange: () -> Unit
-          ) : RecyclerView.Adapter<ItemListAdapter.VH>() {
-
-              inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-                  val tvPriority: TextView = v.findViewById(R.id.tvPriority)
-                  val tvItem: TextView = v.findViewById(R.id.tvWord)
-                  val swEnabled: Switch = v.findViewById(R.id.switchEnabled)
-                  val tvOffset: TextView = v.findViewById(R.id.tvItemOffset)
-                  val seekOffset: SeekBar = v.findViewById(R.id.seekItemOffset)
-                  val btnDel: Button = v.findViewById(R.id.btnDeleteWord)
-                  val btnUp: Button = v.findViewById(R.id.btnMoveUp)
-                  val btnDn: Button = v.findViewById(R.id.btnMoveDown)
-              }
-
-              override fun onCreateViewHolder(p: ViewGroup, t: Int) =
-                  VH(LayoutInflater.from(p.context).inflate(R.layout.item_word, p, false))
-
-              override fun getItemCount() = items.size
-
-              override fun onBindViewHolder(h: VH, pos: Int) {
-                  val item = items[pos]
-                  h.tvPriority.text = "#" + (pos + 1)
-                  h.tvItem.text = item.itemName
-                  h.swEnabled.isChecked = item.enabled
-                  
-                  val progress = item.offsetY + 200
-                  h.seekOffset.progress = progress.coerceIn(0, 400)
-                  
-                  val posText = when {
-                      item.offsetY < 0 -> "Click ABOVE " + kotlin.math.abs(item.offsetY) + "px"
-                      item.offsetY > 0 -> "Click BELOW " + item.offsetY + "px"
-                      else -> "Click ON text"
-                  }
-                  h.tvOffset.text = posText
-                  
-                  h.btnUp.alpha = if (pos == 0) 0.3f else 1f
-                  h.btnDn.alpha = if (pos == items.size - 1) 0.3f else 1f
-
-                  h.swEnabled.setOnCheckedChangeListener { _, c ->
-                      items[h.adapterPosition] = items[h.adapterPosition].copy(enabled = c)
-                      onChange()
-                  }
-                  
-                  h.seekOffset.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                      override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
-                          val offset = v - 200
-                          val posDesc = when {
-                              offset < 0 -> "Click ABOVE " + kotlin.math.abs(offset) + "px"
-                              offset > 0 -> "Click BELOW " + offset + "px"
-                              else -> "Click ON text"
-                          }
-                          h.tvOffset.text = posDesc
-                          if (u) items[h.adapterPosition] = items[h.adapterPosition].copy(offsetY = offset)
-                      }
-                      override fun onStartTrackingTouch(s: SeekBar?) {}
-                      override fun onStopTrackingTouch(s: SeekBar?) { onChange() }
-                  })
-                  
-                  h.btnDel.setOnClickListener { 
-                      val p = h.adapterPosition
-                      if (p >= 0) onDelete(p)
-                  }
-                  
-                  h.btnUp.setOnClickListener {
-                      val p = h.adapterPosition
-                      if (p > 0) {
-                          val t = items[p-1]; items[p-1] = items[p]; items[p] = t
-                          notifyItemMoved(p, p-1)
-                          notifyItemChanged(p-1)
-                          notifyItemChanged(p)
-                          onChange()
-                      }
-                  }
-                  
-                  h.btnDn.setOnClickListener {
-                      val p = h.adapterPosition
-                      if (p < items.size - 1) {
-                          val t = items[p+1]; items[p+1] = items[p]; items[p] = t
-                          notifyItemMoved(p, p+1)
-                          notifyItemChanged(p)
-                          notifyItemChanged(p+1)
-                          onChange()
-                      }
-                  }
-              }
-          }
-          '''
-
-          # === MainActivity.kt ===
-          files["app/src/main/java/com/wordclicker/MainActivity.kt"] = '''
-          package com.wordclicker
-
-          import android.accessibilityservice.AccessibilityServiceInfo
-          import android.app.Activity
-          import android.content.*
-          import android.media.projection.MediaProjectionManager
-          import android.os.*
-          import android.provider.Settings
-          import android.text.*
-          import android.view.accessibility.AccessibilityManager
-          import android.widget.*
-          import androidx.activity.result.contract.ActivityResultContracts
-          import androidx.appcompat.app.AppCompatActivity
-          import androidx.core.content.ContextCompat
-          import androidx.recyclerview.widget.LinearLayoutManager
-          import androidx.recyclerview.widget.RecyclerView
-          import org.json.JSONArray
-          import org.json.JSONObject
-
-          class MainActivity : AppCompatActivity() {
-
-              private lateinit var prefs: SharedPreferences
-              private lateinit var adapter: ItemListAdapter
-              private val itemList = mutableListOf<ItemConfig>()
-
-              private lateinit var btnAccess: Button
-              private lateinit var btnCapture: Button
-              private lateinit var indicatorAccess: android.view.View
-              private lateinit var indicatorCapture: android.view.View
-              private lateinit var tvAccessStatus: TextView
-              private lateinit var tvCaptureStatus: TextView
-              private lateinit var etItem: EditText
-              private lateinit var seekOffset: SeekBar
-              private lateinit var tvOffset: TextView
-              private lateinit var rv: RecyclerView
-              private lateinit var btnAdd: Button
-              private lateinit var etScanInterval: EditText
-              private lateinit var tvLog: TextView
-              private lateinit var btnClear: Button
-              private lateinit var rgMode: RadioGroup
-              private lateinit var rbPriority: RadioButton
-              private lateinit var rbAll: RadioButton
-              private lateinit var swAntiBan: Switch
-
-              private val capturePermissionLauncher =
-                  registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                      if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-                          val intent = Intent(this, ScreenCaptureService::class.java).apply {
-                              action = ScreenCaptureService.ACTION_START
-                              putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
-                              putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, result.data)
-                          }
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                              startForegroundService(intent)
-                          else
-                              startService(intent)
-                      } else {
-                          Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
-                      }
-                  }
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_main)
-                  prefs = getSharedPreferences("GrowtopiaClickerPrefs", Context.MODE_PRIVATE)
-
-                  btnAccess = findViewById(R.id.btnToggleAccess)
-                  btnCapture = findViewById(R.id.btnToggleCapture)
-                  indicatorAccess = findViewById(R.id.indicatorAccess)
-                  indicatorCapture = findViewById(R.id.indicatorCapture)
-                  tvAccessStatus = findViewById(R.id.tvAccessStatus)
-                  tvCaptureStatus = findViewById(R.id.tvCaptureStatus)
-                  etItem = findViewById(R.id.etNewWord)
-                  seekOffset = findViewById(R.id.seekOffsetAbove)
-                  tvOffset = findViewById(R.id.tvOffsetAbove)
-                  rv = findViewById(R.id.rvWordList)
-                  btnAdd = findViewById(R.id.btnAddWord)
-                  etScanInterval = findViewById(R.id.etScanInterval)
-                  tvLog = findViewById(R.id.tvLog)
-                  btnClear = findViewById(R.id.btnClearLog)
-                  rgMode = findViewById(R.id.rgClickMode)
-                  rbPriority = findViewById(R.id.rbPriority)
-                  rbAll = findViewById(R.id.rbClickAll)
-                  swAntiBan = findViewById(R.id.switchAntiBan)
-
-                  loadSettings()
-                  setupRecyclerView()
-                  setupListeners()
-
-                  ScreenCaptureService.logCallback = { msg ->
-                      runOnUiThread {
-                          val current = tvLog.text.toString()
-                          val lines = if (current.length > 2000) current.substring(current.length - 2000) else current
-                          tvLog.text = lines + "\\n" + msg
-                      }
-                  }
-              }
-
-              override fun onResume() {
-                  super.onResume()
-                  updateAccessStatus()
-                  updateCaptureStatus()
-              }
-
-              private fun loadSettings() {
-                  seekOffset.progress = 160
-                  updateOffsetText(160)
-                  etScanInterval.setText(prefs.getInt("scan_interval_ms", 1200).toString())
-                  swAntiBan.isChecked = prefs.getBoolean("anti_ban_mode", true)
-                  
-                  if (prefs.getString("click_mode", "PRIORITY") == "PRIORITY") 
-                      rbPriority.isChecked = true 
-                  else 
-                      rbAll.isChecked = true
-                  
-                  val jsonStr = prefs.getString("item_list", "")
-                  itemList.clear()
-                  
-                  if (jsonStr.isNullOrEmpty()) {
-                      itemList.add(ItemConfig("Clamp", true, -40, 0))
-                      itemList.add(ItemConfig("Transfusion", true, -40, 1))
-                      itemList.add(ItemConfig("Scalpel", true, -40, 2))
-                      itemList.add(ItemConfig("Stitches", true, -40, 3))
-                      itemList.add(ItemConfig("Ultrasound", true, -40, 4))
-                      itemList.add(ItemConfig("Anesthetic", true, -40, 5))
-                      itemList.add(ItemConfig("Defibrillator", true, -40, 6))
-                      itemList.add(ItemConfig("Splint", true, -40, 7))
-                      itemList.add(ItemConfig("Pin", true, -40, 8))
-                      saveSettings()
-                  } else {
-                      try {
-                          val arr = JSONArray(jsonStr)
-                          for (i in 0 until arr.length()) {
-                              val o = arr.getJSONObject(i)
-                              itemList.add(ItemConfig(
-                                  itemName = o.getString("itemName"),
-                                  enabled = o.optBoolean("enabled", true),
-                                  offsetY = o.optInt("offsetY", -40),
-                                  priority = o.optInt("priority", i),
-                                  randomDelay = o.optBoolean("randomDelay", true)
-                              ))
-                          }
-                      } catch (e: Exception) {
-                          itemList.add(ItemConfig("Clamp", true, -40, 0))
-                      }
-                  }
-              }
-
-              private fun updateOffsetText(progress: Int) {
-                  val offset = progress - 200
-                  val text = when {
-                      offset < 0 -> "Click ABOVE text " + kotlin.math.abs(offset) + "px"
-                      offset > 0 -> "Click BELOW text " + offset + "px"
-                      else -> "Click ON text (0px)"
-                  }
-                  tvOffset.text = text
-              }
-
-              private fun saveSettings() {
-                  val arr = JSONArray()
-                  for ((i, w) in itemList.withIndex()) {
-                      val o = JSONObject()
-                      o.put("itemName", w.itemName)
-                      o.put("enabled", w.enabled)
-                      o.put("offsetY", w.offsetY)
-                      o.put("priority", i)
-                      o.put("randomDelay", w.randomDelay)
-                      arr.put(o)
-                  }
-                  prefs.edit()
-                      .putInt("scan_interval_ms", etScanInterval.text.toString().toIntOrNull() ?: 1200)
-                      .putString("item_list", arr.toString())
-                      .putString("click_mode", if (rbPriority.isChecked) "PRIORITY" else "CLICK_ALL")
-                      .putBoolean("anti_ban_mode", swAntiBan.isChecked)
-                      .apply()
-                  sendBroadcast(Intent("com.wordclicker.UPDATE_CONFIG"))
-              }
-
-              private fun setupRecyclerView() {
-                  adapter = ItemListAdapter(itemList,
-                      { pos -> itemList.removeAt(pos); adapter.notifyItemRemoved(pos); saveSettings() },
-                      { saveSettings() }
-                  )
-                  rv.layoutManager = LinearLayoutManager(this)
-                  rv.adapter = adapter
-              }
-
-              private fun setupListeners() {
-                  btnAccess.setOnClickListener {
-                      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                      Toast.makeText(this, "Find 'Growtopia AutoClicker' and enable it", Toast.LENGTH_LONG).show()
-                  }
-
-                  btnCapture.setOnClickListener {
-                      if (ScreenCaptureService.isRunning) {
-                          startService(Intent(this, ScreenCaptureService::class.java).apply { 
-                              action = ScreenCaptureService.ACTION_STOP 
-                          })
-                          Handler(Looper.getMainLooper()).postDelayed({ updateCaptureStatus() }, 500)
-                      } else {
-                          if (!isAccessibilityEnabled()) {
-                              Toast.makeText(this, "Enable Accessibility Service first!", Toast.LENGTH_LONG).show()
-                              return@setOnClickListener
-                          }
-                          val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                          capturePermissionLauncher.launch(mpm.createScreenCaptureIntent())
-                      }
-                  }
-
-                  btnAdd.setOnClickListener {
-                      val name = etItem.text.toString().trim().replace(" ", "_")
-                      if (name.isEmpty()) { 
-                          etItem.error = "Enter item name"
-                          return@setOnClickListener 
-                      }
-                      if (itemList.any { it.itemName.equals(name, true) }) { 
-                          Toast.makeText(this, "Item already exists!", Toast.LENGTH_SHORT).show()
-                          return@setOnClickListener 
-                      }
-                      val offset = seekOffset.progress - 200
-                      itemList.add(ItemConfig(name, true, offset, itemList.size))
-                      adapter.notifyItemInserted(itemList.size - 1)
-                      etItem.setText("")
-                      saveSettings()
-                  }
-
-                  seekOffset.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                      override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) { 
-                          updateOffsetText(v)
-                      }
-                      override fun onStartTrackingTouch(s: SeekBar?) {}
-                      override fun onStopTrackingTouch(s: SeekBar?) {}
-                  })
-                  
-                  rgMode.setOnCheckedChangeListener { _, _ -> saveSettings() }
-                  swAntiBan.setOnCheckedChangeListener { _, _ -> saveSettings() }
-                  
-                  etScanInterval.addTextChangedListener(object : TextWatcher {
-                      override fun afterTextChanged(s: Editable?) { saveSettings() }
-                      override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                      override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                  })
-                  
-                  btnClear.setOnClickListener { tvLog.text = "" }
-              }
-
-              private fun isAccessibilityEnabled(): Boolean {
-                  val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
-                  val services = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-                  val found = services.any { it.id.contains("wordclicker", true) || it.id.contains("growtopia", true) }
-                  return found
-              }
-
-              private fun updateAccessStatus() {
-                  val on = isAccessibilityEnabled()
-                  indicatorAccess.backgroundTintList = ContextCompat.getColorStateList(this, 
-                      if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
-                  tvAccessStatus.text = if (on) "Active" else "Inactive"
-                  tvAccessStatus.setTextColor(ContextCompat.getColor(this, 
-                      if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
-                  btnAccess.text = if (on) "Manage" else "Enable"
-              }
-
-              private fun updateCaptureStatus() {
-                  val on = ScreenCaptureService.isRunning
-                  indicatorCapture.backgroundTintList = ContextCompat.getColorStateList(this, 
-                      if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
-                  tvCaptureStatus.text = if (on) "Running" else "Stopped"
-                  tvCaptureStatus.setTextColor(ContextCompat.getColor(this, 
-                      if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
-                  btnCapture.text = if (on) "Stop" else "Start Scan"
-                  btnCapture.backgroundTintList = ContextCompat.getColorStateList(this, 
-                      if (on) android.R.color.holo_red_light else android.R.color.holo_green_light)
-              }
-          }
-          '''
-
-          # === activity_main.xml ===
-          files["app/src/main/res/layout/activity_main.xml"] = '''<?xml version="1.0" encoding="utf-8"?>
-          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:background="#0F1117" android:padding="16dp">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:paddingBottom="32dp">
-              
-              <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                  android:text="Growtopia AutoClicker" android:textColor="#00C853"
-                  android:textSize="24sp" android:textStyle="bold" android:gravity="center"
-                  android:paddingTop="16dp" android:paddingBottom="4dp"/>
-              <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                  android:text="For Autoclave Surgery Tools"
-                  android:textColor="#888888" android:textSize="12sp" android:gravity="center"
-                  android:paddingBottom="16dp"/>
-
-              <!-- Step 1 -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 1 - Enable Accessibility" android:textColor="#00C853"
-                      android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:gravity="center_vertical">
-                    <View android:id="@+id/indicatorAccess" android:layout_width="12dp" android:layout_height="12dp"
-                        android:background="@drawable/circle_indicator"/>
-                    <TextView android:id="@+id/tvAccessStatus" android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Inactive" android:textColor="#FF4444"
-                        android:textSize="14sp" android:paddingStart="8dp"/>
-                    <Button android:id="@+id/btnToggleAccess" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:text="Enable"
-                        android:backgroundTint="#00C853" android:textColor="#000000" android:textSize="12sp" android:textStyle="bold"/>
-                  </LinearLayout>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Step 2 -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 2 - Start Screen Capture" android:textColor="#00C853"
-                      android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:gravity="center_vertical">
-                    <View android:id="@+id/indicatorCapture" android:layout_width="12dp" android:layout_height="12dp"
-                        android:background="@drawable/circle_indicator"/>
-                    <TextView android:id="@+id/tvCaptureStatus" android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Stopped" android:textColor="#FF4444"
-                        android:textSize="14sp" android:paddingStart="8dp"/>
-                    <Button android:id="@+id/btnToggleCapture" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:text="Start Scan"
-                        android:backgroundTint="#00C853" android:textColor="#000000" android:textSize="12sp" android:textStyle="bold"/>
-                  </LinearLayout>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Mode -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Click Mode" android:textColor="#00C853"
-                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
-                  <RadioGroup android:id="@+id/rgClickMode" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:orientation="vertical">
-                    <RadioButton android:id="@+id/rbPriority" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Priority - click highest priority item only"
-                        android:textColor="#FFFFFF" android:textSize="13sp" android:checked="true" android:buttonTint="#00C853"/>
-                    <RadioButton android:id="@+id/rbClickAll" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Click All - click all detected items"
-                        android:textColor="#FFFFFF" android:textSize="13sp" android:buttonTint="#00C853"/>
-                  </RadioGroup>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="12dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Anti-Ban Mode (Random Delay)" android:textColor="#CCCCCC" android:textSize="13sp"/>
-                    <Switch android:id="@+id/switchAntiBan" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:checked="true"/>
-                  </LinearLayout>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Add Item -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Add New Item" android:textColor="#00C853"
-                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
-                  <EditText android:id="@+id/etNewWord" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:hint="Item name (e.g., Clamp)"
-                      android:textColor="#FFFFFF" android:textColorHint="#666666" android:inputType="text"/>
-                  
-                  <TextView android:id="@+id/tvOffsetAbove" android:layout_width="wrap_content"
-                      android:layout_height="wrap_content" android:text="Click ABOVE text 40px"
-                      android:textColor="#888888" android:textSize="12sp" android:paddingTop="12dp"/>
-                  <SeekBar android:id="@+id/seekOffsetAbove" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:max="400" android:progress="160"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:paddingTop="4dp">
-                      <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                          android:text="Above" android:textColor="#666666" android:textSize="10sp"/>
-                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                          android:text="Text" android:textColor="#00C853" android:textSize="10sp"/>
-                      <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                          android:text="Below" android:textColor="#666666" android:textSize="10sp" android:gravity="end"/>
-                  </LinearLayout>
-                  
-                  <Button android:id="@+id/btnAddWord" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:text="ADD ITEM"
-                      android:backgroundTint="#00C853" android:textColor="#000000" 
-                      android:textStyle="bold" android:layout_marginTop="12dp"/>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Item List -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Item List (Order = Priority)" android:textColor="#00C853"
-                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Drag seekbar: above/on/below text"
-                      android:textColor="#666666" android:textSize="11sp" android:paddingBottom="8dp"/>
-                  <androidx.recyclerview.widget.RecyclerView android:id="@+id/rvWordList"
-                      android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:nestedScrollingEnabled="false"/>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Settings -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
-                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Scan Settings" android:textColor="#00C853"
-                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="12dp"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:gravity="center_vertical">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Scan interval (ms)" android:textColor="#CCCCCC"/>
-                    <EditText android:id="@+id/etScanInterval" android:layout_width="100dp"
-                        android:layout_height="wrap_content" android:text="1200"
-                        android:textColor="#FFFFFF" android:inputType="number" android:gravity="center"/>
-                  </LinearLayout>
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Tip: 1000-1500ms safer, 500-800ms faster"
-                      android:textColor="#666666" android:textSize="11sp" android:paddingTop="4dp"/>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-
-              <!-- Log -->
-              <androidx.cardview.widget.CardView android:layout_width="match_parent"
-                  android:layout_height="wrap_content" app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Activity Log" android:textColor="#00C853"
-                        android:textSize="13sp" android:textStyle="bold"/>
-                    <Button android:id="@+id/btnClearLog" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:text="Clear"
-                        android:backgroundTint="#333344" android:textColor="#AAAAAA" android:textSize="11sp"/>
-                  </LinearLayout>
-                  <ScrollView android:layout_width="match_parent" android:layout_height="200dp"
-                      android:background="#0A0C12" android:padding="8dp">
-                    <TextView android:id="@+id/tvLog" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Ready..."
-                        android:textColor="#00C853" android:textSize="11sp" android:fontFamily="monospace"/>
-                  </ScrollView>
-                </LinearLayout>
-              </androidx.cardview.widget.CardView>
-            </LinearLayout>
-          </ScrollView>'''
-
-          # === item_word.xml ===
-          files["app/src/main/res/layout/item_word.xml"] = '''<?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:background="#222336"
-              android:padding="12dp" android:layout_marginBottom="8dp">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="horizontal" android:gravity="center_vertical">
-              <TextView android:id="@+id/tvPriority" android:layout_width="32dp" android:layout_height="32dp"
-                  android:gravity="center" android:text="#1" android:textColor="#000000"
-                  android:textSize="11sp" android:textStyle="bold"
-                  android:background="@drawable/badge_priority" android:layout_marginEnd="8dp"/>
-              <TextView android:id="@+id/tvWord" android:layout_width="0dp" android:layout_height="wrap_content"
-                  android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold"/>
-              <Button android:id="@+id/btnMoveUp" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="^" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp"/>
-              <Button android:id="@+id/btnMoveDown" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="v" android:textColor="#FFFFFF" android:backgroundTint="#333355" android:textSize="12sp" android:padding="0dp" android:layout_marginStart="4dp"/>
-              <Switch android:id="@+id/switchEnabled" android:layout_width="wrap_content"
-                  android:layout_height="wrap_content" android:layout_marginStart="4dp"/>
-              <Button android:id="@+id/btnDeleteWord" android:layout_width="36dp" android:layout_height="36dp"
-                  android:text="x" android:textColor="#FF4444" android:backgroundTint="#331111"
-                  android:textSize="14sp" android:padding="0dp" android:layout_marginStart="4dp"/>
-            </LinearLayout>
-            <TextView android:id="@+id/tvItemOffset" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="Click ABOVE text 40px"
-                android:textColor="#00C853" android:textSize="12sp" android:paddingTop="8dp"/>
-            <SeekBar android:id="@+id/seekItemOffset" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:max="400" android:progress="160"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="horizontal" android:paddingTop="2dp">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                    android:text="Above" android:textColor="#666666" android:textSize="9sp"/>
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Text" android:textColor="#888888" android:textSize="9sp"/>
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                    android:text="Below" android:textColor="#666666" android:textSize="9sp" android:gravity="end"/>
-            </LinearLayout>
-          </LinearLayout>'''
+          # ── ItemConfig.kt ──────────────────────────────────────────
+          files["app/src/main/java/com/wordclicker/ItemConfig.kt"] = """package com.wordclicker
+
+data class ItemConfig(
+    val itemName: String,
+    val enabled: Boolean = true,
+    val offsetY: Int = -60,
+    val priority: Int = 0,
+    val randomDelay: Boolean = true
+) {
+    fun getClickY(textCenterY: Float): Float = textCenterY + offsetY
+}
+
+enum class ClickMode { PRIORITY, CLICK_ALL }
+"""
+
+          # ── ClickerAccessibilityService.kt ─────────────────────────
+          files["app/src/main/java/com/wordclicker/ClickerAccessibilityService.kt"] = """package com.wordclicker
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.accessibility.AccessibilityEvent
+import kotlin.random.Random
+
+class ClickerAccessibilityService : AccessibilityService() {
+
+    companion object {
+        var instance: ClickerAccessibilityService? = null
+
+        fun performClick(x: Float, y: Float, randomDelay: Boolean = true, onDone: (() -> Unit)? = null) {
+            val svc = instance ?: return
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+            val delay = if (randomDelay) Random.nextLong(50, 180) else 0L
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    val path = Path().apply { moveTo(x, y) }
+                    val stroke = GestureDescription.StrokeDescription(path, 0, 60)
+                    val gesture = GestureDescription.Builder().addStroke(stroke).build()
+                    svc.dispatchGesture(gesture, object : GestureResultCallback() {
+                        override fun onCompleted(g: GestureDescription) { onDone?.invoke() }
+                        override fun onCancelled(g: GestureDescription) {}
+                    }, null)
+                } catch (e: Exception) {
+                    ScreenCaptureService.log("Click error: " + e.message)
+                }
+            }, delay)
+        }
+
+        fun isAvailable() = instance != null
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        ScreenCaptureService.log("Accessibility Service aktif")
+    }
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onInterrupt() {}
+}
+"""
+
+          # ── ScreenCaptureService.kt ────────────────────────────────
+          files["app/src/main/java/com/wordclicker/ScreenCaptureService.kt"] = """package com.wordclicker
+
+import android.app.*
+import android.content.*
+import android.graphics.*
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.media.ImageReader
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.os.*
+import android.util.DisplayMetrics
+import android.view.WindowManager
+import androidx.core.app.NotificationCompat
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.random.Random
+
+class ScreenCaptureService : Service() {
+
+    companion object {
+        var instance: ScreenCaptureService? = null
+        var logCallback: ((String) -> Unit)? = null
+        var isRunning = false
+
+        fun log(msg: String) {
+            val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+            logCallback?.invoke("[\$time] \$msg")
+            android.util.Log.d("AutoClicker", msg)
+        }
+
+        const val ACTION_START  = "START"
+        const val ACTION_STOP   = "STOP"
+        const val EXTRA_RESULT_CODE = "RESULT_CODE"
+        const val EXTRA_RESULT_DATA = "RESULT_DATA"
+        const val CHANNEL_ID    = "AutoClickerChannel"
+    }
+
+    private var mediaProjection: MediaProjection? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var imageReader: ImageReader? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Inisialisasi lazy supaya tidak crash saat service dibuat
+    private val recognizer by lazy {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
+    private var screenWidth  = 1080
+    private var screenHeight = 1920
+    private var screenDensity = 1
+
+    private var isScanning    = false
+    private var itemList      = mutableListOf<ItemConfig>()
+    private var clickMode     = ClickMode.PRIORITY
+    private var scanIntervalMs = 1200L
+    private var antiBanMode   = true
+
+    private val configReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) { loadConfig() }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        createNotificationChannel()
+        loadConfig()
+        val filter = IntentFilter("com.wordclicker.UPDATE_CONFIG")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(configReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(configReceiver, filter)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_START -> {
+                val code = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
+                val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_RESULT_DATA)
+                if (data != null) startCapture(code, data)
+            }
+            ACTION_STOP -> stopCapture()
+        }
+        return START_STICKY
+    }
+
+    private fun startCapture(resultCode: Int, resultData: Intent) {
+        startForeground(1, buildNotification())
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = wm.currentWindowMetrics.bounds
+            screenWidth  = b.width()
+            screenHeight = b.height()
+            screenDensity = resources.displayMetrics.densityDpi
+        } else {
+            val m = DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getMetrics(m)
+            screenWidth   = m.widthPixels
+            screenHeight  = m.heightPixels
+            screenDensity = m.densityDpi
+        }
+        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjection = mpm.getMediaProjection(resultCode, resultData)
+        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
+        virtualDisplay = mediaProjection?.createVirtualDisplay(
+            "AutoClickerCapture", screenWidth, screenHeight, screenDensity,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            imageReader?.surface, null, null
+        )
+        isRunning  = true
+        isScanning = false
+        log("Scan dimulai (\${screenWidth}x\${screenHeight})")
+        scheduleNextScan()
+    }
+
+    private fun stopCapture() {
+        isRunning = false
+        handler.removeCallbacksAndMessages(null)
+        virtualDisplay?.release()
+        imageReader?.close()
+        mediaProjection?.stop()
+        virtualDisplay  = null
+        imageReader     = null
+        mediaProjection = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        log("Scan dihentikan")
+    }
+
+    private fun scheduleNextScan() {
+        if (!isRunning) return
+        val delay = if (antiBanMode)
+            (scanIntervalMs + Random.nextLong(-150, 250)).coerceAtLeast(400)
+        else scanIntervalMs
+        handler.postDelayed({
+            if (isRunning && !isScanning) doScan()
+            else if (isRunning) scheduleNextScan()
+        }, delay)
+    }
+
+    private fun doScan() {
+        val reader = imageReader ?: run { scheduleNextScan(); return }
+        val image  = reader.acquireLatestImage() ?: run { scheduleNextScan(); return }
+        isScanning = true
+        try {
+            val planes     = image.planes[0]
+            val rowPadding = planes.rowStride - planes.pixelStride * screenWidth
+            val bmp = Bitmap.createBitmap(
+                screenWidth + rowPadding / planes.pixelStride,
+                screenHeight, Bitmap.Config.ARGB_8888
+            )
+            bmp.copyPixelsFromBuffer(planes.buffer)
+            image.close()
+            val cropped = Bitmap.createBitmap(bmp, 0, 0, screenWidth, screenHeight)
+            bmp.recycle()
+
+            val enabled = itemList.filter { it.enabled }
+            if (enabled.isEmpty()) {
+                cropped.recycle(); isScanning = false; scheduleNextScan(); return
+            }
+
+            // Gunakan Tasks.await di background thread supaya tidak crash
+            Thread {
+                try {
+                    val inputImage = InputImage.fromBitmap(cropped, 0)
+                    val result = Tasks.await(recognizer.process(inputImage))
+                    processOcrResult(result, enabled)
+                } catch (e: Exception) {
+                    log("OCR error: \${e.message}")
+                } finally {
+                    cropped.recycle()
+                    isScanning = false
+                    handler.post { scheduleNextScan() }
+                }
+            }.start()
+
+        } catch (e: Exception) {
+            try { image.close() } catch (_: Exception) {}
+            log("Capture error: \${e.message}")
+            isScanning = false
+            scheduleNextScan()
+        }
+    }
+
+    private fun processOcrResult(result: com.google.mlkit.vision.text.Text, targets: List<ItemConfig>) {
+        data class Found(val cfg: ItemConfig, val cx: Float, val cy: Float, val pri: Int)
+        val found = mutableListOf<Found>()
+
+        for (block in result.textBlocks) {
+            for (line in block.lines) {
+                val lineText = line.text.trim()
+                for ((pri, cfg) in targets.withIndex()) {
+                    if (lineText.contains(cfg.itemName, ignoreCase = true)) {
+                        val box = line.boundingBox ?: continue
+                        val cx  = box.centerX().toFloat()
+                        val cy  = cfg.getClickY(box.centerY().toFloat())
+                        if (cx > 30 && cx < screenWidth - 30 && cy > 30 && cy < screenHeight - 30) {
+                            found.add(Found(cfg, cx, cy, pri))
+                            val dir = when { cfg.offsetY < 0 -> "atas" ; cfg.offsetY > 0 -> "bawah" ; else -> "tepat" }
+                            log("Ketemu '\${cfg.itemName}' klik \$dir (\${cx.toInt()},\${cy.toInt()})")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (found.isEmpty()) return
+        if (!ClickerAccessibilityService.isAvailable()) {
+            log("Accessibility belum aktif!")
+            return
+        }
+
+        when (clickMode) {
+            ClickMode.PRIORITY -> {
+                val best = found.minByOrNull { it.pri } ?: return
+                log("Klik prioritas #\${best.pri+1} '\${best.cfg.itemName}'")
+                ClickerAccessibilityService.performClick(best.cx, best.cy, best.cfg.randomDelay) {
+                    log("Klik berhasil")
+                }
+            }
+            ClickMode.CLICK_ALL -> {
+                val sorted = found.sortedBy { it.pri }
+                    .distinctBy { "\${it.cx.toInt()},\${it.cy.toInt()}" }
+                    .take(5)
+                for (f in sorted) {
+                    log("Klik semua '\${f.cfg.itemName}'")
+                    ClickerAccessibilityService.performClick(f.cx, f.cy, f.cfg.randomDelay)
+                    Thread.sleep(Random.nextLong(200, 450))
+                }
+            }
+        }
+    }
+
+    private fun loadConfig() {
+        val p = getSharedPreferences("AutoClickerPrefs", Context.MODE_PRIVATE)
+        clickMode     = if (p.getString("click_mode","PRIORITY") == "PRIORITY") ClickMode.PRIORITY else ClickMode.CLICK_ALL
+        scanIntervalMs = p.getInt("scan_interval_ms", 1200).toLong()
+        antiBanMode   = p.getBoolean("anti_ban", true)
+        itemList.clear()
+        val json = p.getString("item_list", "") ?: ""
+        if (json.isEmpty()) {
+            listOf("Clamp","Transfusion","Scalpel","Stitches","Ultrasound",
+                   "Anesthetic","Defibrillator","Splint","Pin")
+                .forEachIndexed { i, name -> itemList.add(ItemConfig(name, true, -40, i)) }
+        } else {
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    itemList.add(ItemConfig(
+                        itemName    = o.getString("itemName"),
+                        enabled     = o.optBoolean("enabled", true),
+                        offsetY     = o.optInt("offsetY", -40),
+                        priority    = o.optInt("priority", i),
+                        randomDelay = o.optBoolean("randomDelay", true)
+                    ))
+                }
+            } catch (_: Exception) {
+                itemList.add(ItemConfig("Clamp", true, -40, 0))
+            }
+        }
+        log("\${itemList.count{it.enabled}} item aktif | mode: \${if(clickMode==ClickMode.PRIORITY)"Prioritas" else "Semua"} | interval: \${scanIntervalMs}ms")
+    }
+
+    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+        .setContentTitle("Word Auto Clicker")
+        .setContentText("Memindai layar...")
+        .setSmallIcon(android.R.drawable.ic_menu_view)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setOngoing(true)
+        .build()
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(CHANNEL_ID, "Auto Clicker", NotificationManager.IMPORTANCE_LOW)
+            ch.setShowBadge(false)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
+        }
+    }
+
+    override fun onBind(intent: Intent?) = null
+
+    override fun onDestroy() {
+        instance  = null
+        isRunning = false
+        try { unregisterReceiver(configReceiver) } catch (_: Exception) {}
+        try { recognizer.close() } catch (_: Exception) {}
+        super.onDestroy()
+    }
+}
+"""
+
+          # ── ItemListAdapter.kt ─────────────────────────────────────
+          files["app/src/main/java/com/wordclicker/ItemListAdapter.kt"] = """package com.wordclicker
+
+import android.view.*
+import android.widget.*
+import androidx.recyclerview.widget.RecyclerView
+import kotlin.math.abs
+
+class ItemListAdapter(
+    private val items: MutableList<ItemConfig>,
+    private val onDelete: (Int) -> Unit,
+    private val onChange: () -> Unit
+) : RecyclerView.Adapter<ItemListAdapter.VH>() {
+
+    inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+        val tvPriority: TextView  = v.findViewById(R.id.tvPriority)
+        val tvItem: TextView      = v.findViewById(R.id.tvWord)
+        val swEnabled: Switch     = v.findViewById(R.id.switchEnabled)
+        val tvOffset: TextView    = v.findViewById(R.id.tvItemOffset)
+        val seekOffset: SeekBar   = v.findViewById(R.id.seekItemOffset)
+        val btnDel: Button        = v.findViewById(R.id.btnDeleteWord)
+        val btnUp: Button         = v.findViewById(R.id.btnMoveUp)
+        val btnDn: Button         = v.findViewById(R.id.btnMoveDown)
+    }
+
+    override fun onCreateViewHolder(p: ViewGroup, t: Int) =
+        VH(LayoutInflater.from(p.context).inflate(R.layout.item_word, p, false))
+
+    override fun getItemCount() = items.size
+
+    private fun offsetLabel(offset: Int) = when {
+        offset < 0 -> "Klik ATAS \${abs(offset)}px"
+        offset > 0 -> "Klik BAWAH \${offset}px"
+        else       -> "Klik TEPAT di teks"
+    }
+
+    override fun onBindViewHolder(h: VH, pos: Int) {
+        val item = items[pos]
+        h.tvPriority.text     = "#\${pos + 1}"
+        h.tvItem.text         = item.itemName
+        h.swEnabled.isChecked = item.enabled
+        h.seekOffset.progress = (item.offsetY + 200).coerceIn(0, 400)
+        h.tvOffset.text       = offsetLabel(item.offsetY)
+        h.btnUp.alpha         = if (pos == 0) 0.3f else 1f
+        h.btnDn.alpha         = if (pos == items.size - 1) 0.3f else 1f
+
+        h.swEnabled.setOnCheckedChangeListener { _, c ->
+            items[h.adapterPosition] = items[h.adapterPosition].copy(enabled = c); onChange()
+        }
+        h.seekOffset.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
+                val off = v - 200
+                h.tvOffset.text = offsetLabel(off)
+                if (u) items[h.adapterPosition] = items[h.adapterPosition].copy(offsetY = off)
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) { onChange() }
+        })
+        h.btnDel.setOnClickListener { val p = h.adapterPosition; if (p >= 0) onDelete(p) }
+        h.btnUp.setOnClickListener {
+            val p = h.adapterPosition
+            if (p > 0) { val t = items[p-1]; items[p-1]=items[p]; items[p]=t
+                notifyItemMoved(p,p-1); notifyItemChanged(p-1); notifyItemChanged(p); onChange() }
+        }
+        h.btnDn.setOnClickListener {
+            val p = h.adapterPosition
+            if (p < items.size-1) { val t = items[p+1]; items[p+1]=items[p]; items[p]=t
+                notifyItemMoved(p,p+1); notifyItemChanged(p); notifyItemChanged(p+1); onChange() }
+        }
+    }
+}
+"""
+
+          # ── MainActivity.kt ────────────────────────────────────────
+          files["app/src/main/java/com/wordclicker/MainActivity.kt"] = """package com.wordclicker
+
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Activity
+import android.content.*
+import android.media.projection.MediaProjectionManager
+import android.os.*
+import android.provider.Settings
+import android.text.*
+import android.view.accessibility.AccessibilityManager
+import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import org.json.JSONArray
+import org.json.JSONObject
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var adapter: ItemListAdapter
+    private val itemList = mutableListOf<ItemConfig>()
+
+    private lateinit var btnAccess: Button
+    private lateinit var btnCapture: Button
+    private lateinit var indAccess: android.view.View
+    private lateinit var indCapture: android.view.View
+    private lateinit var tvAccessStatus: TextView
+    private lateinit var tvCaptureStatus: TextView
+    private lateinit var etItem: EditText
+    private lateinit var seekOffset: SeekBar
+    private lateinit var tvOffset: TextView
+    private lateinit var rv: RecyclerView
+    private lateinit var btnAdd: Button
+    private lateinit var etScanInterval: EditText
+    private lateinit var tvLog: TextView
+    private lateinit var btnClear: Button
+    private lateinit var rgMode: RadioGroup
+    private lateinit var rbPriority: RadioButton
+    private lateinit var rbAll: RadioButton
+    private lateinit var swAntiBan: Switch
+
+    private val captureLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+                val i = Intent(this, ScreenCaptureService::class.java).apply {
+                    action = ScreenCaptureService.ACTION_START
+                    putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
+                    putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, result.data)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+                else startService(i)
+                Handler(Looper.getMainLooper()).postDelayed({ updateCaptureStatus() }, 800)
+            } else {
+                Toast.makeText(this, "Izin ditolak", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    override fun onCreate(s: Bundle?) {
+        super.onCreate(s)
+        setContentView(R.layout.activity_main)
+        prefs = getSharedPreferences("AutoClickerPrefs", Context.MODE_PRIVATE)
+
+        btnAccess     = findViewById(R.id.btnToggleAccess)
+        btnCapture    = findViewById(R.id.btnToggleCapture)
+        indAccess     = findViewById(R.id.indicatorAccess)
+        indCapture    = findViewById(R.id.indicatorCapture)
+        tvAccessStatus  = findViewById(R.id.tvAccessStatus)
+        tvCaptureStatus = findViewById(R.id.tvCaptureStatus)
+        etItem        = findViewById(R.id.etNewWord)
+        seekOffset    = findViewById(R.id.seekOffsetAbove)
+        tvOffset      = findViewById(R.id.tvOffsetAbove)
+        rv            = findViewById(R.id.rvWordList)
+        btnAdd        = findViewById(R.id.btnAddWord)
+        etScanInterval = findViewById(R.id.etScanInterval)
+        tvLog         = findViewById(R.id.tvLog)
+        btnClear      = findViewById(R.id.btnClearLog)
+        rgMode        = findViewById(R.id.rgClickMode)
+        rbPriority    = findViewById(R.id.rbPriority)
+        rbAll         = findViewById(R.id.rbClickAll)
+        swAntiBan     = findViewById(R.id.switchAntiBan)
+
+        loadSettings()
+        setupRv()
+        setupListeners()
+
+        ScreenCaptureService.logCallback = { msg ->
+            runOnUiThread {
+                val t = tvLog.text.toString()
+                val lines = if (t.length > 3000) t.takeLast(2000) else t
+                tvLog.text = "\$lines\\n\$msg"
+            }
+        }
+    }
+
+    override fun onResume() { super.onResume(); updateAccessStatus(); updateCaptureStatus() }
+
+    private fun offsetLabel(progress: Int): String {
+        val off = progress - 200
+        return when { off < 0 -> "Klik ATAS \${-off}px" ; off > 0 -> "Klik BAWAH \${off}px" ; else -> "Klik TEPAT di teks" }
+    }
+
+    private fun loadSettings() {
+        if (prefs.getString("click_mode","PRIORITY") == "PRIORITY") rbPriority.isChecked = true else rbAll.isChecked = true
+        etScanInterval.setText(prefs.getInt("scan_interval_ms", 1200).toString())
+        swAntiBan.isChecked = prefs.getBoolean("anti_ban", true)
+        seekOffset.progress = 160
+        tvOffset.text = offsetLabel(160)
+        itemList.clear()
+        val json = prefs.getString("item_list","") ?: ""
+        if (json.isEmpty()) {
+            listOf("Clamp","Transfusion","Scalpel","Stitches","Ultrasound",
+                   "Anesthetic","Defibrillator","Splint","Pin")
+                .forEachIndexed { i, n -> itemList.add(ItemConfig(n, true, -40, i)) }
+            saveSettings()
+        } else {
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    itemList.add(ItemConfig(o.getString("itemName"), o.optBoolean("enabled",true), o.optInt("offsetY",-40), o.optInt("priority",i), o.optBoolean("randomDelay",true)))
+                }
+            } catch (_: Exception) { itemList.add(ItemConfig("Clamp",true,-40,0)) }
+        }
+    }
+
+    private fun saveSettings() {
+        val arr = JSONArray()
+        itemList.forEachIndexed { i, w ->
+            val o = JSONObject()
+            o.put("itemName", w.itemName); o.put("enabled", w.enabled)
+            o.put("offsetY", w.offsetY); o.put("priority", i)
+            o.put("randomDelay", w.randomDelay); arr.put(o)
+        }
+        prefs.edit()
+            .putString("item_list", arr.toString())
+            .putString("click_mode", if (rbPriority.isChecked) "PRIORITY" else "CLICK_ALL")
+            .putInt("scan_interval_ms", etScanInterval.text.toString().toIntOrNull() ?: 1200)
+            .putBoolean("anti_ban", swAntiBan.isChecked)
+            .apply()
+        sendBroadcast(Intent("com.wordclicker.UPDATE_CONFIG"))
+    }
+
+    private fun setupRv() {
+        adapter = ItemListAdapter(itemList,
+            { pos -> itemList.removeAt(pos); adapter.notifyItemRemoved(pos); saveSettings() },
+            { saveSettings() }
+        )
+        rv.layoutManager = LinearLayoutManager(this); rv.adapter = adapter
+    }
+
+    private fun setupListeners() {
+        btnAccess.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            Toast.makeText(this,"Cari 'Word Auto Clicker' lalu aktifkan",Toast.LENGTH_LONG).show()
+        }
+        btnCapture.setOnClickListener {
+            if (ScreenCaptureService.isRunning) {
+                startService(Intent(this, ScreenCaptureService::class.java).apply { action = ScreenCaptureService.ACTION_STOP })
+                Handler(Looper.getMainLooper()).postDelayed({ updateCaptureStatus() }, 500)
+            } else {
+                if (!isAccessibilityEnabled()) {
+                    Toast.makeText(this,"Aktifkan Accessibility Service dulu!",Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                captureLauncher.launch(mpm.createScreenCaptureIntent())
+            }
+        }
+        btnAdd.setOnClickListener {
+            val name = etItem.text.toString().trim()
+            if (name.isEmpty()) { etItem.error = "Masukkan nama"; return@setOnClickListener }
+            if (itemList.any { it.itemName.equals(name,true) }) { Toast.makeText(this,"Sudah ada!",Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            val offset = seekOffset.progress - 200
+            itemList.add(ItemConfig(name, true, offset, itemList.size))
+            adapter.notifyItemInserted(itemList.size - 1)
+            etItem.setText(""); saveSettings()
+        }
+        seekOffset.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) { tvOffset.text = offsetLabel(v) }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+        rgMode.setOnCheckedChangeListener { _, _ -> saveSettings() }
+        swAntiBan.setOnCheckedChangeListener { _, _ -> saveSettings() }
+        etScanInterval.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { saveSettings() }
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+        btnClear.setOnClickListener { tvLog.text = "" }
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.id.contains("wordclicker", true) }
+    }
+
+    private fun updateAccessStatus() {
+        val on = isAccessibilityEnabled()
+        indAccess.backgroundTintList = ContextCompat.getColorStateList(this, if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
+        tvAccessStatus.text = if (on) "Aktif" else "Tidak Aktif"
+        tvAccessStatus.setTextColor(ContextCompat.getColor(this, if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
+        btnAccess.text = if (on) "Kelola" else "Aktifkan"
+    }
+
+    private fun updateCaptureStatus() {
+        val on = ScreenCaptureService.isRunning
+        indCapture.backgroundTintList = ContextCompat.getColorStateList(this, if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
+        tvCaptureStatus.text = if (on) "Berjalan" else "Berhenti"
+        tvCaptureStatus.setTextColor(ContextCompat.getColor(this, if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
+        btnCapture.text = if (on) "Stop" else "Mulai Scan"
+        btnCapture.backgroundTintList = ContextCompat.getColorStateList(this, if (on) android.R.color.holo_red_light else android.R.color.holo_green_light)
+    }
+}
+"""
+
+          # ── activity_main.xml ──────────────────────────────────────
+          files["app/src/main/res/layout/activity_main.xml"] = """<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#0F1117" android:padding="16dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="vertical" android:paddingBottom="32dp">
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Word Auto Clicker" android:textColor="#00C853"
+        android:textSize="24sp" android:textStyle="bold" android:gravity="center"
+        android:paddingTop="16dp" android:paddingBottom="4dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="OCR — Bekerja di semua app dan game"
+        android:textColor="#888888" android:textSize="12sp" android:gravity="center"
+        android:paddingBottom="16dp"/>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LANGKAH 1 — Accessibility Service (untuk klik)"
+            android:textColor="#00C853" android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+          <View android:id="@+id/indicatorAccess" android:layout_width="12dp" android:layout_height="12dp"
+              android:background="@drawable/circle_indicator"/>
+          <TextView android:id="@+id/tvAccessStatus" android:layout_width="0dp" android:layout_height="wrap_content"
+              android:layout_weight="1" android:text="Tidak Aktif" android:textColor="#FF4444"
+              android:textSize="14sp" android:paddingStart="8dp"/>
+          <Button android:id="@+id/btnToggleAccess" android:layout_width="wrap_content"
+              android:layout_height="wrap_content" android:text="Aktifkan"
+              android:backgroundTint="#00C853" android:textColor="#000000" android:textStyle="bold" android:textSize="12sp"/>
+        </LinearLayout>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LANGKAH 2 — Screen Capture + OCR (baca teks)"
+            android:textColor="#00C853" android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+          <View android:id="@+id/indicatorCapture" android:layout_width="12dp" android:layout_height="12dp"
+              android:background="@drawable/circle_indicator"/>
+          <TextView android:id="@+id/tvCaptureStatus" android:layout_width="0dp" android:layout_height="wrap_content"
+              android:layout_weight="1" android:text="Berhenti" android:textColor="#FF4444"
+              android:textSize="14sp" android:paddingStart="8dp"/>
+          <Button android:id="@+id/btnToggleCapture" android:layout_width="wrap_content"
+              android:layout_height="wrap_content" android:text="Mulai Scan"
+              android:backgroundTint="#00C853" android:textColor="#000000" android:textStyle="bold" android:textSize="12sp"/>
+        </LinearLayout>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Mode Klik" android:textColor="#00C853"
+            android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
+        <RadioGroup android:id="@+id/rgClickMode" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical">
+          <RadioButton android:id="@+id/rbPriority" android:layout_width="match_parent"
+              android:layout_height="wrap_content" android:text="Prioritas — hanya kata #1 yang diklik"
+              android:textColor="#FFFFFF" android:textSize="13sp" android:checked="true" android:buttonTint="#00C853"/>
+          <RadioButton android:id="@+id/rbClickAll" android:layout_width="match_parent"
+              android:layout_height="wrap_content" android:text="Klik Semua — semua kata yang terdeteksi"
+              android:textColor="#FFFFFF" android:textSize="13sp" android:buttonTint="#00C853"/>
+        </RadioGroup>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="12dp">
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+              android:layout_weight="1" android:text="Anti-Ban (delay acak)" android:textColor="#CCCCCC" android:textSize="13sp"/>
+          <Switch android:id="@+id/switchAntiBan" android:layout_width="wrap_content"
+              android:layout_height="wrap_content" android:checked="true"/>
+        </LinearLayout>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Tambah Kata Target" android:textColor="#00C853"
+            android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
+        <EditText android:id="@+id/etNewWord" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:hint="Nama kata/item..."
+            android:textColor="#FFFFFF" android:textColorHint="#666666" android:inputType="text"/>
+        <TextView android:id="@+id/tvOffsetAbove" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="Klik ATAS 40px"
+            android:textColor="#888888" android:textSize="12sp" android:paddingTop="12dp"/>
+        <SeekBar android:id="@+id/seekOffsetAbove" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:max="400" android:progress="160"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:paddingTop="2dp">
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+              android:text="Atas" android:textColor="#666666" android:textSize="10sp"/>
+          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:text="|Teks|" android:textColor="#00C853" android:textSize="10sp"/>
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+              android:text="Bawah" android:textColor="#666666" android:textSize="10sp" android:gravity="end"/>
+        </LinearLayout>
+        <Button android:id="@+id/btnAddWord" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="TAMBAH"
+            android:backgroundTint="#00C853" android:textColor="#000000"
+            android:textStyle="bold" android:layout_marginTop="12dp"/>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Daftar Kata (urutan = prioritas)" android:textColor="#00C853"
+            android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
+        <androidx.recyclerview.widget.RecyclerView android:id="@+id/rvWordList"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"/>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Pengaturan Scan" android:textColor="#00C853"
+            android:textSize="13sp" android:textStyle="bold" android:paddingBottom="12dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+              android:layout_weight="1" android:text="Interval scan (ms)" android:textColor="#CCCCCC"/>
+          <EditText android:id="@+id/etScanInterval" android:layout_width="100dp"
+              android:layout_height="wrap_content" android:text="1200"
+              android:textColor="#FFFFFF" android:inputType="number" android:gravity="center"/>
+        </LinearLayout>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="1000-1500ms lebih aman | 500-800ms lebih cepat"
+            android:textColor="#666666" android:textSize="11sp" android:paddingTop="4dp"/>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:layout_width="match_parent"
+        android:layout_height="wrap_content" app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="vertical" android:padding="16dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+              android:layout_weight="1" android:text="Log Aktivitas" android:textColor="#00C853"
+              android:textSize="13sp" android:textStyle="bold"/>
+          <Button android:id="@+id/btnClearLog" android:layout_width="wrap_content"
+              android:layout_height="wrap_content" android:text="Bersihkan"
+              android:backgroundTint="#333344" android:textColor="#AAAAAA" android:textSize="11sp"/>
+        </LinearLayout>
+        <ScrollView android:layout_width="match_parent" android:layout_height="200dp"
+            android:background="#0A0C12" android:padding="8dp">
+          <TextView android:id="@+id/tvLog" android:layout_width="match_parent"
+              android:layout_height="wrap_content" android:text="Siap..."
+              android:textColor="#00C853" android:textSize="11sp" android:fontFamily="monospace"/>
+        </ScrollView>
+      </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+  </LinearLayout>
+</ScrollView>"""
+
+          # ── item_word.xml ──────────────────────────────────────────
+          files["app/src/main/res/layout/item_word.xml"] = """<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:background="#222336"
+    android:padding="12dp" android:layout_marginBottom="8dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:gravity="center_vertical">
+    <TextView android:id="@+id/tvPriority" android:layout_width="32dp" android:layout_height="32dp"
+        android:gravity="center" android:text="#1" android:textColor="#000000"
+        android:textSize="11sp" android:textStyle="bold"
+        android:background="@drawable/badge_priority" android:layout_marginEnd="8dp"/>
+    <TextView android:id="@+id/tvWord" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold"/>
+    <Button android:id="@+id/btnMoveUp" android:layout_width="36dp" android:layout_height="36dp"
+        android:text="^" android:textColor="#FFFFFF" android:backgroundTint="#333355"
+        android:textSize="12sp" android:padding="0dp"/>
+    <Button android:id="@+id/btnMoveDown" android:layout_width="36dp" android:layout_height="36dp"
+        android:text="v" android:textColor="#FFFFFF" android:backgroundTint="#333355"
+        android:textSize="12sp" android:padding="0dp" android:layout_marginStart="4dp"/>
+    <Switch android:id="@+id/switchEnabled" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:layout_marginStart="4dp"/>
+    <Button android:id="@+id/btnDeleteWord" android:layout_width="36dp" android:layout_height="36dp"
+        android:text="X" android:textColor="#FF4444" android:backgroundTint="#331111"
+        android:textSize="12sp" android:padding="0dp" android:layout_marginStart="4dp"/>
+  </LinearLayout>
+  <TextView android:id="@+id/tvItemOffset" android:layout_width="wrap_content"
+      android:layout_height="wrap_content" android:text="Klik ATAS 40px"
+      android:textColor="#00C853" android:textSize="12sp" android:paddingTop="8dp"/>
+  <SeekBar android:id="@+id/seekItemOffset" android:layout_width="match_parent"
+      android:layout_height="wrap_content" android:max="400" android:progress="160"/>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:paddingTop="2dp">
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:text="Atas" android:textColor="#666666" android:textSize="9sp"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="|Teks|" android:textColor="#888888" android:textSize="9sp"/>
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:text="Bawah" android:textColor="#666666" android:textSize="9sp" android:gravity="end"/>
+  </LinearLayout>
+</LinearLayout>"""
 
           for path, content in files.items():
               os.makedirs(os.path.dirname(path), exist_ok=True)
               with open(path, "w") as f:
                   f.write(content)
-              print("Created: " + path)
+              print("OK: " + path)
           PYEOF
 
       - name: Download Gradle wrapper
@@ -1276,9 +1109,8 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -1286,6 +1118,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GrowtopiaAutoClicker-v7-FixCrash
+          name: WordAutoClicker-v8
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
