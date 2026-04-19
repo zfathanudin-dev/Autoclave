@@ -85,8 +85,8 @@ jobs:
                   applicationId "com.wordclicker"
                   minSdk 24
                   targetSdk 34
-                  versionCode 6
-                  versionName "6.0-Fix"
+                  versionCode 7
+                  versionName "7.0-FixCrash"
               }
               
               buildTypes {
@@ -120,7 +120,7 @@ jobs:
           }
           EOF
 
-      - name: AndroidManifest.xml - FIXED
+      - name: AndroidManifest.xml - FIXED EXPORTED
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -151,11 +151,11 @@ jobs:
                       </intent-filter>
                   </activity>
 
-                  <!-- FIXED: Accessibility Service dengan exported="false" dan enabled="true" -->
+                  <!-- FIX: AccessibilityService HARUS exported=true karena di-bind system -->
                   <service
                       android:name="com.wordclicker.ClickerAccessibilityService"
                       android:enabled="true"
-                      android:exported="false"
+                      android:exported="true"
                       android:label="@string/accessibility_service_label"
                       android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
                       <intent-filter>
@@ -187,7 +187,7 @@ jobs:
           </resources>
           EOF
 
-      - name: accessibility_service_config.xml - IMPROVED
+      - name: accessibility_service_config.xml
         run: |
           cat > app/src/main/res/xml/accessibility_service_config.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -245,18 +245,15 @@ jobs:
           enum class ClickMode { PRIORITY, CLICK_ALL }
           '''
 
-          # === ClickerAccessibilityService.kt - IMPROVED ===
+          # === ClickerAccessibilityService.kt - SIMPLIFIED ===
           files["app/src/main/java/com/wordclicker/ClickerAccessibilityService.kt"] = '''
           package com.wordclicker
 
           import android.accessibilityservice.AccessibilityService
-          import android.accessibilityservice.AccessibilityServiceInfo
           import android.accessibilityservice.GestureDescription
-          import android.content.Intent
           import android.graphics.Path
           import android.os.Build
           import android.view.accessibility.AccessibilityEvent
-          import android.view.accessibility.AccessibilityNodeInfo
           import kotlin.random.Random
 
           class ClickerAccessibilityService : AccessibilityService() {
@@ -279,19 +276,19 @@ jobs:
                       } else extraDelay
                       
                       android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                          val path = Path().apply { moveTo(x, y) }
-                          val stroke = GestureDescription.StrokeDescription(path, 0, Random.nextLong(40, 80))
-                          val gesture = GestureDescription.Builder().addStroke(stroke).build()
-                          
-                          svc.dispatchGesture(gesture, object : GestureResultCallback() {
-                              override fun onCompleted(g: GestureDescription) { 
-                                  lastClickTime = System.currentTimeMillis()
-                                  onDone?.invoke() 
-                              }
-                              override fun onCancelled(g: GestureDescription) {
-                                  // Click cancelled, try again
-                              }
-                          }, null)
+                          try {
+                              val path = Path().apply { moveTo(x, y) }
+                              val stroke = GestureDescription.StrokeDescription(path, 0, Random.nextLong(40, 80))
+                              val gesture = GestureDescription.Builder().addStroke(stroke).build()
+                              
+                              svc.dispatchGesture(gesture, object : GestureResultCallback() {
+                                  override fun onCompleted(g: GestureDescription) { 
+                                      lastClickTime = System.currentTimeMillis()
+                                      onDone?.invoke() 
+                                  }
+                                  override fun onCancelled(g: GestureDescription) {}
+                              }, null)
+                          } catch (e: Exception) {}
                       }, totalDelay)
                   }
 
@@ -301,39 +298,16 @@ jobs:
               override fun onServiceConnected() {
                   super.onServiceConnected()
                   instance = this
-                  
-                  // Configure service info
-                  serviceInfo = AccessibilityServiceInfo().apply {
-                      eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or 
-                                  AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                                  AccessibilityEvent.TYPE_VIEW_CLICKED
-                      feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-                      flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                              AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
-                      notificationTimeout = 100
-                  }
-                  
-                  ScreenCaptureService.log("Accessibility Service Connected")
-              }
-
-              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-                  // Keep service running
-                  return START_STICKY
+                  android.util.Log.d("GrowtopiaClicker", "Accessibility Service Connected")
               }
 
               override fun onDestroy() {
                   instance = null
-                  ScreenCaptureService.log("Accessibility Service Destroyed")
                   super.onDestroy()
               }
 
-              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-                  // Handle events if needed
-              }
-              
-              override fun onInterrupt() {
-                  // Service interrupted
-              }
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+              override fun onInterrupt() {}
           }
           '''
 
@@ -618,7 +592,6 @@ jobs:
                   
                   val jsonStr = prefs.getString("item_list", "")
                   if (jsonStr.isNullOrEmpty()) {
-                      // Default items for Autoclave
                       itemList.add(ItemConfig("Clamp", true, -40, 0))
                       itemList.add(ItemConfig("Transfusion", true, -40, 1))
                       itemList.add(ItemConfig("Scalpel", true, -40, 2))
@@ -886,7 +859,7 @@ jobs:
               }
 
               private fun loadSettings() {
-                  seekOffset.progress = 160  // Default -40px (160-200)
+                  seekOffset.progress = 160
                   updateOffsetText(160)
                   etScanInterval.setText(prefs.getInt("scan_interval_ms", 1200).toString())
                   swAntiBan.isChecked = prefs.getBoolean("anti_ban_mode", true)
@@ -900,7 +873,6 @@ jobs:
                   itemList.clear()
                   
                   if (jsonStr.isNullOrEmpty()) {
-                      // Default surgical tools for Autoclave
                       itemList.add(ItemConfig("Clamp", true, -40, 0))
                       itemList.add(ItemConfig("Transfusion", true, -40, 1))
                       itemList.add(ItemConfig("Scalpel", true, -40, 2))
@@ -910,7 +882,7 @@ jobs:
                       itemList.add(ItemConfig("Defibrillator", true, -40, 6))
                       itemList.add(ItemConfig("Splint", true, -40, 7))
                       itemList.add(ItemConfig("Pin", true, -40, 8))
-                      saveSettings() // Save defaults
+                      saveSettings()
                   } else {
                       try {
                           val arr = JSONArray(jsonStr)
@@ -1322,6 +1294,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GrowtopiaAutoClicker-v6-Fix
+          name: GrowtopiaAutoClicker-v7-FixCrash
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
