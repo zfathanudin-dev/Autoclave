@@ -1,0 +1,694 @@
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ══════════════════════════════════════════════
+      #  TULIS SEMUA FILE PROJECT
+      # ══════════════════════════════════════════════
+
+      - name: Buat struktur folder
+        run: |
+          mkdir -p app/src/main/java/com/wordclicker
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
+          mkdir -p app/src/main/res/drawable
+          mkdir -p gradle/wrapper
+
+      - name: Tulis settings.gradle
+        run: |
+          cat > settings.gradle << 'ENDOFFILE'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "WordClicker"
+          include ':app'
+          ENDOFFILE
+
+      - name: Tulis build.gradle (root)
+        run: |
+          cat > build.gradle << 'ENDOFFILE'
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
+          }
+          ENDOFFILE
+
+      - name: Tulis app/build.gradle
+        run: |
+          cat > app/build.gradle << 'ENDOFFILE'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.wordclicker'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.wordclicker"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release { minifyEnabled false }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+              kotlinOptions { jvmTarget = '1.8' }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.cardview:cardview:1.0.0'
+              implementation 'androidx.recyclerview:recyclerview:1.3.2'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          ENDOFFILE
+
+      - name: Tulis gradle-wrapper.properties
+        run: |
+          cat > gradle/wrapper/gradle-wrapper.properties << 'ENDOFFILE'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          ENDOFFILE
+
+      - name: Tulis AndroidManifest.xml
+        run: |
+          cat > app/src/main/AndroidManifest.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.wordclicker">
+              <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                  tools:ignore="ProtectedPermissions"
+                  xmlns:tools="http://schemas.android.com/tools"/>
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".WordClickerAccessibilityService"
+                      android:exported="true"
+                      android:label="@string/accessibility_service_label"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService"/>
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config"/>
+                  </service>
+              </application>
+          </manifest>
+          ENDOFFILE
+
+      - name: Tulis strings.xml
+        run: |
+          cat > app/src/main/res/values/strings.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Word Auto Clicker</string>
+              <string name="accessibility_service_label">Word Auto Clicker Service</string>
+              <string name="accessibility_service_description">Deteksi kata di layar dan klik otomatis</string>
+          </resources>
+          ENDOFFILE
+
+      - name: Tulis accessibility_service_config.xml
+        run: |
+          cat > app/src/main/res/xml/accessibility_service_config.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewScrolled"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagDefault|flagReportViewIds|flagRequestEnhancedWebAccessibility"
+              android:canPerformGestures="true"
+              android:canRetrieveWindowContent="true"
+              android:description="@string/accessibility_service_description"
+              android:notificationTimeout="100"
+              android:packageNames=""/>
+          ENDOFFILE
+
+      - name: Tulis drawable XMLs
+        run: |
+          cat > app/src/main/res/drawable/circle_indicator.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+              <solid android:color="#FF4444"/>
+              <size android:width="12dp" android:height="12dp"/>
+          </shape>
+          ENDOFFILE
+
+          cat > app/src/main/res/drawable/badge_priority.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+              <solid android:color="#5B5FEF"/>
+              <size android:width="32dp" android:height="32dp"/>
+          </shape>
+          ENDOFFILE
+
+      - name: Tulis activity_main.xml
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="#0F1117" android:padding="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:paddingBottom="32dp">
+              <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                  android:text="🔍 Word Auto Clicker" android:textColor="#FFFFFF"
+                  android:textSize="22sp" android:textStyle="bold" android:gravity="center"
+                  android:paddingVertical="16dp"/>
+              <!-- STATUS -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical">
+                  <View android:id="@+id/statusIndicator" android:layout_width="12dp" android:layout_height="12dp"
+                      android:background="@drawable/circle_indicator" android:backgroundTint="#FF4444"/>
+                  <TextView android:id="@+id/tvStatus" android:layout_width="0dp" android:layout_height="wrap_content"
+                      android:layout_weight="1" android:text="● Tidak Aktif" android:textColor="#FF4444"
+                      android:textSize="16sp" android:paddingStart="8dp"/>
+                  <Button android:id="@+id/btnToggleService" android:layout_width="wrap_content"
+                      android:layout_height="wrap_content" android:text="Aktifkan Service"
+                      android:backgroundTint="#5B5FEF" android:textColor="#FFFFFF" android:textSize="12sp"/>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+              <!-- MODE KLIK -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="🎯 Mode Klik" android:textColor="#AAAAFF"
+                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="10dp"/>
+                  <RadioGroup android:id="@+id/rgClickMode" android:layout_width="match_parent"
+                      android:layout_height="wrap_content" android:orientation="vertical">
+                    <RadioButton android:id="@+id/rbPriority" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:text="🏆 Mode Prioritas"
+                        android:textColor="#FFFFFF" android:textSize="14sp" android:checked="true"
+                        android:buttonTint="#5B5FEF" android:paddingStart="8dp"/>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="Hanya kata prioritas tertinggi yang diklik"
+                        android:textColor="#888888" android:textSize="11sp"
+                        android:paddingStart="36dp" android:paddingBottom="8dp"/>
+                    <RadioButton android:id="@+id/rbClickAll" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:text="🖱️ Klik Semua"
+                        android:textColor="#FFFFFF" android:textSize="14sp"
+                        android:buttonTint="#5B5FEF" android:paddingStart="8dp"/>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="Semua kata yang terdeteksi diklik berurutan"
+                        android:textColor="#888888" android:textSize="11sp" android:paddingStart="36dp"/>
+                  </RadioGroup>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+              <!-- TAMBAH KATA -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="➕ Tambah Kata Target" android:textColor="#AAAAFF"
+                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal">
+                    <EditText android:id="@+id/etNewWord" android:layout_width="0dp"
+                        android:layout_height="wrap_content" android:layout_weight="1"
+                        android:hint="Ketik kata target..." android:textColorHint="#666666"
+                        android:textColor="#FFFFFF" android:backgroundTint="#333355"
+                        android:paddingHorizontal="12dp" android:inputType="text"/>
+                    <Button android:id="@+id/btnAddWord" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="Tambah"
+                        android:backgroundTint="#5B5FEF" android:textColor="#FFFFFF"
+                        android:layout_marginStart="8dp"/>
+                  </LinearLayout>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+              <!-- DAFTAR KATA -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="📋 Daftar Kata (urutan = prioritas)"
+                      android:textColor="#AAAAFF" android:textSize="13sp"
+                      android:textStyle="bold" android:paddingBottom="8dp"/>
+                  <androidx.recyclerview.widget.RecyclerView android:id="@+id/rvWordList"
+                      android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:nestedScrollingEnabled="false"/>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+              <!-- PENGATURAN -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" android:layout_marginBottom="12dp"
+                  app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="⚙️ Pengaturan Global" android:textColor="#AAAAFF"
+                      android:textSize="13sp" android:textStyle="bold" android:paddingBottom="12dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Klik di atas kata" android:textColor="#CCCCCC"/>
+                    <Switch android:id="@+id/switchClickAbove" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:checked="true"
+                        android:thumbTint="#5B5FEF" android:trackTint="#333355"/>
+                  </LinearLayout>
+                  <TextView android:id="@+id/tvOffsetAbove" android:layout_width="wrap_content"
+                      android:layout_height="wrap_content" android:text="Offset Atas: 80px"
+                      android:textColor="#888888" android:textSize="12sp"/>
+                  <SeekBar android:id="@+id/seekOffsetAbove" android:layout_width="match_parent"
+                      android:layout_height="wrap_content" android:max="300" android:progress="80"
+                      android:progressTint="#5B5FEF" android:thumbTint="#5B5FEF" android:paddingBottom="12dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Klik pada kata" android:textColor="#CCCCCC"/>
+                    <Switch android:id="@+id/switchClickOnWord" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="#5B5FEF" android:trackTint="#333355"/>
+                  </LinearLayout>
+                  <TextView android:id="@+id/tvOffsetOnWord" android:layout_width="wrap_content"
+                      android:layout_height="wrap_content" android:text="Offset Kata: 0px"
+                      android:textColor="#888888" android:textSize="12sp"/>
+                  <SeekBar android:id="@+id/seekOffsetOnWord" android:layout_width="match_parent"
+                      android:layout_height="wrap_content" android:max="100" android:progress="0"
+                      android:progressTint="#5B5FEF" android:thumbTint="#5B5FEF" android:paddingBottom="12dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Delay antar klik (ms)" android:textColor="#CCCCCC"/>
+                    <EditText android:id="@+id/etDelayMs" android:layout_width="80dp"
+                        android:layout_height="wrap_content" android:text="500"
+                        android:textColor="#FFFFFF" android:backgroundTint="#333355"
+                        android:inputType="number" android:gravity="center"/>
+                  </LinearLayout>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Loop otomatis" android:textColor="#CCCCCC"/>
+                    <Switch android:id="@+id/switchLoop" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:checked="true"
+                        android:thumbTint="#5B5FEF" android:trackTint="#333355"/>
+                  </LinearLayout>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+              <!-- LOG -->
+              <androidx.cardview.widget.CardView android:layout_width="match_parent"
+                  android:layout_height="wrap_content" app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="📜 Log Aktivitas"
+                        android:textColor="#AAAAFF" android:textSize="13sp" android:textStyle="bold"/>
+                    <Button android:id="@+id/btnClearLog" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="Bersihkan"
+                        android:backgroundTint="#333344" android:textColor="#AAAAAA" android:textSize="11sp"/>
+                  </LinearLayout>
+                  <ScrollView android:layout_width="match_parent" android:layout_height="150dp"
+                      android:background="#0A0C12" android:padding="8dp">
+                    <TextView android:id="@+id/tvLog" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:text="Menunggu aktivitas..."
+                        android:textColor="#66CC66" android:textSize="11sp" android:fontFamily="monospace"/>
+                  </ScrollView>
+                </LinearLayout>
+              </androidx.cardview.widget.CardView>
+            </LinearLayout>
+          </ScrollView>
+          ENDOFFILE
+
+      - name: Tulis item_word.xml
+        run: |
+          cat > app/src/main/res/layout/item_word.xml << 'ENDOFFILE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:background="#222336"
+              android:padding="12dp" android:layout_marginBottom="8dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+              <TextView android:id="@+id/tvPriority" android:layout_width="32dp" android:layout_height="32dp"
+                  android:gravity="center" android:text="#1" android:textColor="#FFFFFF"
+                  android:textSize="11sp" android:textStyle="bold"
+                  android:background="@drawable/badge_priority" android:layout_marginEnd="8dp"/>
+              <TextView android:id="@+id/tvWord" android:layout_width="0dp" android:layout_height="wrap_content"
+                  android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold"/>
+              <ImageButton android:id="@+id/btnMoveUp" android:layout_width="28dp" android:layout_height="28dp"
+                  android:src="@android:drawable/arrow_up_float"
+                  android:background="?attr/selectableItemBackgroundBorderless"
+                  android:imageTintList="@android:color/white"/>
+              <ImageButton android:id="@+id/btnMoveDown" android:layout_width="28dp" android:layout_height="28dp"
+                  android:src="@android:drawable/arrow_down_float"
+                  android:background="?attr/selectableItemBackgroundBorderless"
+                  android:imageTintList="@android:color/white"/>
+              <Switch android:id="@+id/switchEnabled" android:layout_width="wrap_content"
+                  android:layout_height="wrap_content" android:thumbTint="#5B5FEF"
+                  android:trackTint="#333355" android:layout_marginStart="4dp"/>
+              <ImageButton android:id="@+id/btnDeleteWord" android:layout_width="28dp" android:layout_height="28dp"
+                  android:src="@android:drawable/ic_delete"
+                  android:background="?attr/selectableItemBackgroundBorderless"
+                  android:imageTintList="@android:color/holo_red_light" android:layout_marginStart="2dp"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="8dp">
+              <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                  android:layout_weight="1" android:text="⬆ Klik atas kata"
+                  android:textColor="#AAAAAA" android:textSize="12sp"/>
+              <Switch android:id="@+id/switchItemClickAbove" android:layout_width="wrap_content"
+                  android:layout_height="wrap_content" android:thumbTint="#5B5FEF" android:trackTint="#333355"/>
+            </LinearLayout>
+            <TextView android:id="@+id/tvItemOffset" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Offset atas: 80px"
+                android:textColor="#666666" android:textSize="11sp" android:paddingTop="4dp"/>
+            <SeekBar android:id="@+id/seekItemOffset" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="300" android:progress="80"
+                android:progressTint="#5B5FEF" android:thumbTint="#5B5FEF"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="6dp">
+              <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                  android:layout_weight="1" android:text="● Klik pada kata"
+                  android:textColor="#AAAAAA" android:textSize="12sp"/>
+              <Switch android:id="@+id/switchItemClickOnWord" android:layout_width="wrap_content"
+                  android:layout_height="wrap_content" android:thumbTint="#5B5FEF" android:trackTint="#333355"/>
+            </LinearLayout>
+          </LinearLayout>
+          ENDOFFILE
+
+      - name: Tulis WordConfig.kt
+        run: |
+          cat > app/src/main/java/com/wordclicker/WordConfig.kt << 'ENDOFFILE'
+          package com.wordclicker
+          data class WordConfig(
+              val word: String,
+              val enabled: Boolean,
+              val clickAbove: Boolean,
+              val clickOnWord: Boolean,
+              val offsetAbove: Int
+          )
+          enum class ClickMode { PRIORITY, CLICK_ALL }
+          ENDOFFILE
+
+      - name: Tulis WordClickerAccessibilityService.kt
+        run: |
+          cat > app/src/main/java/com/wordclicker/WordClickerAccessibilityService.kt << 'ENDOFFILE'
+          package com.wordclicker
+          import android.accessibilityservice.AccessibilityService
+          import android.accessibilityservice.GestureDescription
+          import android.content.*
+          import android.graphics.Path
+          import android.graphics.Rect
+          import android.os.*
+          import android.view.accessibility.*
+          import org.json.JSONArray
+          import java.text.SimpleDateFormat
+          import java.util.*
+          class WordClickerAccessibilityService : AccessibilityService() {
+              companion object { var logCallback: ((String) -> Unit)? = null }
+              private lateinit var prefs: SharedPreferences
+              private val handler = Handler(Looper.getMainLooper())
+              private var isProcessing = false
+              private var wordList = mutableListOf<WordConfig>()
+              private var clickMode = ClickMode.PRIORITY
+              private val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+              private val configReceiver = object : BroadcastReceiver() {
+                  override fun onReceive(ctx: Context?, intent: Intent?) { loadConfig(); log("⚙️ Config diperbarui") }
+              }
+              override fun onServiceConnected() {
+                  prefs = getSharedPreferences("WordClickerPrefs", Context.MODE_PRIVATE)
+                  loadConfig()
+                  registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
+                  log("✅ Service aktif")
+              }
+              override fun onDestroy() { try { unregisterReceiver(configReceiver) } catch (_: Exception) {}; log("🛑 Service berhenti") }
+              override fun onInterrupt() {}
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  if (event == null || isProcessing) return
+                  val ev = setOf(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED)
+                  if (event.eventType !in ev) return
+                  val enabled = wordList.filter { it.enabled }
+                  if (enabled.isEmpty()) return
+                  isProcessing = true
+                  handler.post {
+                      try {
+                          val root = rootInActiveWindow ?: return@post
+                          if (clickMode == ClickMode.PRIORITY) scanPriority(root, enabled) else scanAll(root, enabled)
+                          root.recycle()
+                      } finally { handler.postDelayed({ isProcessing = false }, prefs.getInt("delay_ms", 500).toLong()) }
+                  }
+              }
+              private fun scanPriority(root: AccessibilityNodeInfo, targets: List<WordConfig>) {
+                  for ((i, cfg) in targets.withIndex()) {
+                      val nodes = root.findAccessibilityNodeInfosByText(cfg.word) ?: continue
+                      val node = nodes.firstOrNull { it.text?.contains(cfg.word, true) == true } ?: continue
+                      val b = Rect(); node.getBoundsInScreen(b)
+                      if (b.isEmpty) { node.recycle(); continue }
+                      log("🏆 Prioritas #${i+1} '${cfg.word}' → klik, sisanya diabaikan")
+                      doClick(cfg, b.centerX().toFloat(), b.centerY().toFloat())
+                      node.recycle(); return
+                  }
+              }
+              private fun scanAll(root: AccessibilityNodeInfo, targets: List<WordConfig>) {
+                  for (cfg in targets) {
+                      val nodes = root.findAccessibilityNodeInfosByText(cfg.word) ?: continue
+                      val node = nodes.firstOrNull { it.text?.contains(cfg.word, true) == true } ?: continue
+                      val b = Rect(); node.getBoundsInScreen(b)
+                      if (b.isEmpty) { node.recycle(); continue }
+                      log("🖱️ Klik '${cfg.word}'")
+                      doClick(cfg, b.centerX().toFloat(), b.centerY().toFloat())
+                      node.recycle()
+                      Thread.sleep(prefs.getInt("delay_ms", 500).toLong())
+                  }
+              }
+              private fun doClick(cfg: WordConfig, cx: Float, cy: Float) {
+                  if (cfg.clickAbove) click(cx, cy - cfg.offsetAbove)
+                  if (cfg.clickOnWord) click(cx, cy + prefs.getInt("offset_on_word", 0))
+              }
+              private fun click(x: Float, y: Float) {
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+                  val p = Path().apply { moveTo(x, y) }
+                  val g = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p, 0, 50)).build()
+                  dispatchGesture(g, object : GestureResultCallback() {
+                      override fun onCompleted(g: GestureDescription) { log("✔️ Klik (${"%.0f".format(x)}, ${"%.0f".format(y)})") }
+                  }, null)
+              }
+              private fun loadConfig() {
+                  clickMode = if (prefs.getString("click_mode","PRIORITY") == "PRIORITY") ClickMode.PRIORITY else ClickMode.CLICK_ALL
+                  wordList.clear()
+                  val arr = JSONArray(prefs.getString("word_list","[]") ?: "[]")
+                  for (i in 0 until arr.length()) {
+                      val o = arr.getJSONObject(i)
+                      wordList.add(WordConfig(o.getString("word"), o.getBoolean("enabled"), o.optBoolean("clickAbove",true), o.optBoolean("clickOnWord",false), o.optInt("offsetAbove",80)))
+                  }
+                  log("📋 ${wordList.size} kata. Mode: ${if(clickMode==ClickMode.PRIORITY)"Prioritas" else "Klik Semua"}")
+              }
+              private fun log(msg: String) { logCallback?.invoke("[${sdf.format(Date())}] $msg") }
+          }
+          ENDOFFILE
+
+      - name: Tulis WordListAdapter.kt
+        run: |
+          cat > app/src/main/java/com/wordclicker/WordListAdapter.kt << 'ENDOFFILE'
+          package com.wordclicker
+          import android.view.*
+          import android.widget.*
+          import androidx.recyclerview.widget.RecyclerView
+          class WordListAdapter(private val items: MutableList<WordConfig>, private val onDelete: (Int) -> Unit, private val onChange: () -> Unit) : RecyclerView.Adapter<WordListAdapter.VH>() {
+              inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+                  val tvPriority: TextView = v.findViewById(R.id.tvPriority)
+                  val tvWord: TextView = v.findViewById(R.id.tvWord)
+                  val swEnabled: Switch = v.findViewById(R.id.switchEnabled)
+                  val swAbove: Switch = v.findViewById(R.id.switchItemClickAbove)
+                  val swOnWord: Switch = v.findViewById(R.id.switchItemClickOnWord)
+                  val seekOff: SeekBar = v.findViewById(R.id.seekItemOffset)
+                  val tvOff: TextView = v.findViewById(R.id.tvItemOffset)
+                  val btnDel: ImageButton = v.findViewById(R.id.btnDeleteWord)
+                  val btnUp: ImageButton = v.findViewById(R.id.btnMoveUp)
+                  val btnDn: ImageButton = v.findViewById(R.id.btnMoveDown)
+              }
+              override fun onCreateViewHolder(p: ViewGroup, t: Int) = VH(LayoutInflater.from(p.context).inflate(R.layout.item_word, p, false))
+              override fun getItemCount() = items.size
+              override fun onBindViewHolder(h: VH, pos: Int) {
+                  val item = items[pos]
+                  h.tvPriority.text = "#${pos+1}"
+                  h.tvWord.text = item.word
+                  h.swEnabled.isChecked = item.enabled
+                  h.swAbove.isChecked = item.clickAbove
+                  h.swOnWord.isChecked = item.clickOnWord
+                  h.seekOff.progress = item.offsetAbove
+                  h.tvOff.text = "Offset atas: ${item.offsetAbove}px"
+                  h.btnUp.alpha = if (pos == 0) 0.3f else 1f
+                  h.btnDn.alpha = if (pos == items.size-1) 0.3f else 1f
+                  h.swEnabled.setOnCheckedChangeListener { _, c -> items[h.adapterPosition] = items[h.adapterPosition].copy(enabled=c); onChange() }
+                  h.swAbove.setOnCheckedChangeListener { _, c -> items[h.adapterPosition] = items[h.adapterPosition].copy(clickAbove=c); onChange() }
+                  h.swOnWord.setOnCheckedChangeListener { _, c -> items[h.adapterPosition] = items[h.adapterPosition].copy(clickOnWord=c); onChange() }
+                  h.seekOff.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) { h.tvOff.text="Offset atas: ${v}px"; if(u) items[h.adapterPosition]=items[h.adapterPosition].copy(offsetAbove=v) }
+                      override fun onStartTrackingTouch(s: SeekBar?) {}
+                      override fun onStopTrackingTouch(s: SeekBar?) { onChange() }
+                  })
+                  h.btnDel.setOnClickListener { val p=h.adapterPosition; if(p!=RecyclerView.NO_ID.toInt()) onDelete(p) }
+                  h.btnUp.setOnClickListener { val p=h.adapterPosition; if(p>0) { val t=items[p-1]; items[p-1]=items[p]; items[p]=t; notifyItemMoved(p,p-1); notifyItemChanged(p-1); notifyItemChanged(p); onChange() } }
+                  h.btnDn.setOnClickListener { val p=h.adapterPosition; if(p<items.size-1) { val t=items[p+1]; items[p+1]=items[p]; items[p]=t; notifyItemMoved(p,p+1); notifyItemChanged(p); notifyItemChanged(p+1); onChange() } }
+              }
+          }
+          ENDOFFILE
+
+      - name: Tulis MainActivity.kt
+        run: |
+          cat > app/src/main/java/com/wordclicker/MainActivity.kt << 'ENDOFFILE'
+          package com.wordclicker
+          import android.accessibilityservice.AccessibilityServiceInfo
+          import android.content.*
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.text.*
+          import android.view.accessibility.AccessibilityManager
+          import android.widget.*
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.content.ContextCompat
+          import androidx.recyclerview.widget.LinearLayoutManager
+          import androidx.recyclerview.widget.RecyclerView
+          import org.json.JSONArray
+          class MainActivity : AppCompatActivity() {
+              private lateinit var prefs: SharedPreferences
+              private lateinit var adapter: WordListAdapter
+              private val wordList = mutableListOf<WordConfig>()
+              private lateinit var btnToggle: Button
+              private lateinit var indicator: android.view.View
+              private lateinit var tvStatus: TextView
+              private lateinit var etWord: EditText
+              private lateinit var seekAbove: SeekBar
+              private lateinit var tvAbove: TextView
+              private lateinit var seekOnWord: SeekBar
+              private lateinit var tvOnWord: TextView
+              private lateinit var swAbove: Switch
+              private lateinit var swOnWord: Switch
+              private lateinit var rv: RecyclerView
+              private lateinit var btnAdd: Button
+              private lateinit var etDelay: EditText
+              private lateinit var swLoop: Switch
+              private lateinit var tvLog: TextView
+              private lateinit var btnClear: Button
+              private lateinit var rgMode: RadioGroup
+              private lateinit var rbPriority: RadioButton
+              private lateinit var rbAll: RadioButton
+              override fun onCreate(s: Bundle?) {
+                  super.onCreate(s)
+                  setContentView(R.layout.activity_main)
+                  prefs = getSharedPreferences("WordClickerPrefs", Context.MODE_PRIVATE)
+                  btnToggle=findViewById(R.id.btnToggleService); indicator=findViewById(R.id.statusIndicator)
+                  tvStatus=findViewById(R.id.tvStatus); etWord=findViewById(R.id.etNewWord)
+                  seekAbove=findViewById(R.id.seekOffsetAbove); tvAbove=findViewById(R.id.tvOffsetAbove)
+                  seekOnWord=findViewById(R.id.seekOffsetOnWord); tvOnWord=findViewById(R.id.tvOffsetOnWord)
+                  swAbove=findViewById(R.id.switchClickAbove); swOnWord=findViewById(R.id.switchClickOnWord)
+                  rv=findViewById(R.id.rvWordList); btnAdd=findViewById(R.id.btnAddWord)
+                  etDelay=findViewById(R.id.etDelayMs); swLoop=findViewById(R.id.switchLoop)
+                  tvLog=findViewById(R.id.tvLog); btnClear=findViewById(R.id.btnClearLog)
+                  rgMode=findViewById(R.id.rgClickMode); rbPriority=findViewById(R.id.rbPriority); rbAll=findViewById(R.id.rbClickAll)
+                  load(); setupRv(); setupListeners()
+              }
+              override fun onResume() { super.onResume(); updateStatus() }
+              private fun load() {
+                  seekAbove.progress=prefs.getInt("offset_above",80); tvAbove.text="Offset Atas: ${seekAbove.progress}px"
+                  seekOnWord.progress=prefs.getInt("offset_on_word",0); tvOnWord.text="Offset Kata: ${seekOnWord.progress}px"
+                  swAbove.isChecked=prefs.getBoolean("click_above",true); swOnWord.isChecked=prefs.getBoolean("click_on_word",false)
+                  etDelay.setText(prefs.getInt("delay_ms",500).toString()); swLoop.isChecked=prefs.getBoolean("loop_enabled",true)
+                  if (prefs.getString("click_mode","PRIORITY")=="PRIORITY") rbPriority.isChecked=true else rbAll.isChecked=true
+                  val arr=JSONArray(prefs.getString("word_list","[]")?:"[]")
+                  wordList.clear()
+                  for(i in 0 until arr.length()) { val o=arr.getJSONObject(i); wordList.add(WordConfig(o.getString("word"),o.getBoolean("enabled"),o.optBoolean("clickAbove",true),o.optBoolean("clickOnWord",false),o.optInt("offsetAbove",80))) }
+              }
+              private fun save() {
+                  val arr=JSONArray(); for(w in wordList) { val o=org.json.JSONObject(); o.put("word",w.word);o.put("enabled",w.enabled);o.put("clickAbove",w.clickAbove);o.put("clickOnWord",w.clickOnWord);o.put("offsetAbove",w.offsetAbove); arr.put(o) }
+                  prefs.edit().putInt("offset_above",seekAbove.progress).putInt("offset_on_word",seekOnWord.progress).putBoolean("click_above",swAbove.isChecked).putBoolean("click_on_word",swOnWord.isChecked).putInt("delay_ms",etDelay.text.toString().toIntOrNull()?:500).putBoolean("loop_enabled",swLoop.isChecked).putString("word_list",arr.toString()).putString("click_mode",if(rbPriority.isChecked)"PRIORITY" else "CLICK_ALL").apply()
+                  sendBroadcast(Intent("com.wordclicker.UPDATE_CONFIG"))
+              }
+              private fun setupRv() {
+                  adapter=WordListAdapter(wordList,{p->wordList.removeAt(p);adapter.notifyItemRemoved(p);save()},{save()})
+                  rv.layoutManager=LinearLayoutManager(this); rv.adapter=adapter
+              }
+              private fun setupListeners() {
+                  btnToggle.setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); Toast.makeText(this,"Cari 'Word Auto Clicker' lalu aktifkan",Toast.LENGTH_LONG).show() }
+                  btnAdd.setOnClickListener { val w=etWord.text.toString().trim(); if(w.isEmpty()){etWord.error="Masukkan kata";return@setOnClickListener}; if(wordList.any{it.word.equals(w,true)}){Toast.makeText(this,"Sudah ada!",Toast.LENGTH_SHORT).show();return@setOnClickListener}; wordList.add(WordConfig(w,true,swAbove.isChecked,swOnWord.isChecked,seekAbove.progress)); adapter.notifyItemInserted(wordList.size-1); etWord.setText(""); save() }
+                  seekAbove.setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(s:SeekBar?,v:Int,u:Boolean){tvAbove.text="Offset Atas: ${v}px"};override fun onStartTrackingTouch(s:SeekBar?){}; override fun onStopTrackingTouch(s:SeekBar?){save()}})
+                  seekOnWord.setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(s:SeekBar?,v:Int,u:Boolean){tvOnWord.text="Offset Kata: ${v}px"};override fun onStartTrackingTouch(s:SeekBar?){}; override fun onStopTrackingTouch(s:SeekBar?){save()}})
+                  swAbove.setOnCheckedChangeListener{_,_->save()}; swOnWord.setOnCheckedChangeListener{_,_->save()}; swLoop.setOnCheckedChangeListener{_,_->save()}; rgMode.setOnCheckedChangeListener{_,_->save()}
+                  etDelay.addTextChangedListener(object:TextWatcher{override fun afterTextChanged(s:Editable?){save()};override fun beforeTextChanged(s:CharSequence?,a:Int,b:Int,c:Int){};override fun onTextChanged(s:CharSequence?,a:Int,b:Int,c:Int){}})
+                  btnClear.setOnClickListener{tvLog.text=""}
+                  WordClickerAccessibilityService.logCallback={msg->runOnUiThread{val lines=tvLog.text.toString().split("\n").takeLast(50);tvLog.text=(lines+msg).joinToString("\n")}}
+              }
+              private fun updateStatus() {
+                  val am=getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+                  val on=am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).any{it.id.contains("wordclicker",true)}
+                  indicator.backgroundTintList=ContextCompat.getColorStateList(this,if(on)android.R.color.holo_green_light else android.R.color.holo_red_light)
+                  tvStatus.text=if(on)"● Aktif" else "● Tidak Aktif"
+                  tvStatus.setTextColor(ContextCompat.getColor(this,if(on)android.R.color.holo_green_dark else android.R.color.holo_red_dark))
+                  btnToggle.text=if(on)"Kelola Service" else "Aktifkan Service"
+              }
+          }
+          ENDOFFILE
+
+      # ══════════════════════════════════════════════
+      #  DOWNLOAD GRADLE WRAPPER JAR & BUILD
+      # ══════════════════════════════════════════════
+
+      - name: Download gradlew
+        run: |
+          wget -q https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradlew -O gradlew
+          chmod +x gradlew
+
+      - name: Download gradle-wrapper.jar
+        run: |
+          mkdir -p gradle/wrapper
+          wget -q "https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar" \
+               -O gradle/wrapper/gradle-wrapper.jar
+
+      - name: Build APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WordAutoClicker-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
