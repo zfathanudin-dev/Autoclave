@@ -205,36 +205,36 @@ jobs:
 
           # ── WordConfig.kt ──────────────────────────────────────────
           files["app/src/main/java/com/wordclicker/WordConfig.kt"] = """
-package com.wordclicker
+          package com.wordclicker
 
-data class WordConfig(
-    val word: String,
-    val enabled: Boolean,
-    val clickAbove: Boolean,
-    val clickOnWord: Boolean,
-    val offsetAbove: Int
-)
+          data class WordConfig(
+              val word: String,
+              val enabled: Boolean,
+              val clickAbove: Boolean,
+              val clickOnWord: Boolean,
+              val offsetAbove: Int
+                )
 
-enum class ClickMode { PRIORITY, CLICK_ALL }
-"""
+          enum class ClickMode { PRIORITY, CLICK_ALL }
+         """
 
           # ── ClickerAccessibilityService.kt ─────────────────────────
           # Hanya untuk perform gesture klik, BUKAN untuk scan teks
           files["app/src/main/java/com/wordclicker/ClickerAccessibilityService.kt"] = """
-package com.wordclicker
+           package com.wordclicker
 
-import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
-import android.graphics.Path
-import android.os.Build
-import android.view.accessibility.AccessibilityEvent
+         import android.accessibilityservice.AccessibilityService
+         import android.accessibilityservice.GestureDescription
+         import android.graphics.Path
+         import android.os.Build
+         import android.view.accessibility.AccessibilityEvent
 
-class ClickerAccessibilityService : AccessibilityService() {
+         class ClickerAccessibilityService : AccessibilityService() {
 
-    companion object {
-        var instance: ClickerAccessibilityService? = null
+         companion object {
+         var instance: ClickerAccessibilityService? = null
 
-        fun performClick(x: Float, y: Float, onDone: (() -> Unit)? = null) {
+         fun performClick(x: Float, y: Float, onDone: (() -> Unit)? = null) {
             val svc = instance ?: return
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
             val path = Path().apply { moveTo(x, y) }
@@ -243,25 +243,25 @@ class ClickerAccessibilityService : AccessibilityService() {
             svc.dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(g: GestureDescription) { onDone?.invoke() }
             }, null)
-        }
+         }
 
-        fun isAvailable() = instance != null
-    }
+         fun isAvailable() = instance != null
+         }
 
-    override fun onServiceConnected() {
-        instance = this
-        ScreenCaptureService.log("✅ Accessibility Service aktif — siap klik")
-    }
+         override fun onServiceConnected() {
+         instance = this
+         ScreenCaptureService.log("✅ Accessibility Service aktif — siap klik")
+         }
 
-    override fun onDestroy() {
-        instance = null
-        ScreenCaptureService.log("🛑 Accessibility Service berhenti")
-    }
+         override fun onDestroy() {
+         instance = null
+         ScreenCaptureService.log("🛑 Accessibility Service berhenti")
+         }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-    override fun onInterrupt() {}
-}
-"""
+         override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+         override fun onInterrupt() {}
+         }
+         """
 
           # ── ScreenCaptureService.kt ────────────────────────────────
           # Ambil screenshot + OCR + kirim koordinat ke klik
