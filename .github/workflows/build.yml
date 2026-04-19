@@ -477,7 +477,8 @@ jobs:
 
             // 🔥 FIX Android 13+
                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-               registerReceiver(
+               regis
+              terReceiver(
                configReceiver,
                IntentFilter("com.wordclicker.UPDATE_CONFIG"),
                RECEIVER_NOT_EXPORTED
@@ -495,88 +496,75 @@ jobs:
                      val ev = setOf(
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED
-                  )
+       
+      - name: Tulis WordClickerAccessibilityService.kt
+        run: |
+          cat > app/src/main/java/com/wordclicker/WordClickerAccessibilityService.kt << 'ENDOFFILE'
+          package com.wordclicker
 
-                     if (event.eventType !in ev) return
+          import android.accessibilityservice.AccessibilityService
+          import android.view.accessibility.AccessibilityEvent
+          import android.os.*
+          import android.content.*
+          import java.text.SimpleDateFormat
+          import java.util.*
 
-                     val enabled = wordList.filter { it.enabled }
-                     if (enabled.isEmpty()) return
+          class WordClickerAccessibilityService : AccessibilityService() {
 
-                     val root = rootInActiveWindow ?: return
-
-                           isProcessing = true
-
-              handler.post {
-                      try {
-                          // disable sementara biar gak crash
-                          log("🧪 Service jalan tanpa scan")
-                   } catch (e: Exception) {
-                          e.printStackTrace()
-                   } finally {
-                          try { root.recycle() } catch (_: Exception) {}
-                handler.postDelayed({
-                          isProcessing = false
-                  }, prefs.getInt("delay_ms", 500).toLong())
+              companion object {
+                  var logCallback: ((String) -> Unit)? = null
               }
-          }
 
-                 } catch (e: Exception) {
-                    e.printStackTrace()
-               }
-           }
-              private fun scanPriority(root: AccessibilityNodeInfo, targets: List<WordConfig>) {
-                  for ((i, cfg) in targets.withIndex()) {
-                      val nodes = root.findAccessibilityNodeInfosByText(cfg.word) ?: continue
-                      val node = nodes.firstOrNull { it.text?.contains(cfg.word, true) == true } ?: continue
-                      val b = Rect(); node.getBoundsInScreen(b)
-                      if (b.isEmpty) { node.recycle(); continue }
-                      log("🏆 Prioritas #${i+1} '${cfg.word}' → klik, sisanya diabaikan")
-                      doClick(cfg, b.centerX().toFloat(), b.centerY().toFloat())
-                      node.recycle(); return
+              private lateinit var prefs: SharedPreferences
+              private val handler = Handler(Looper.getMainLooper())
+              private val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+              override fun onServiceConnected() {
+                  prefs = getSharedPreferences("WordClickerPrefs", Context.MODE_PRIVATE)
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      registerReceiver(
+                          configReceiver,
+                          IntentFilter("com.wordclicker.UPDATE_CONFIG"),
+                          RECEIVER_NOT_EXPORTED
+                      )
+                  } else {
+                      registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
+                  }
+
+                  handler.postDelayed({
+                      log("✅ Service aktif (SAFE MODE)")
+                  }, 1000)
+              }
+
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  try {
+                      if (event == null) return
+                      log("🧪 Event masuk: ${event.eventType}")
+                  } catch (e: Exception) {
+                      e.printStackTrace()
                   }
               }
-              private fun scanAll(root: AccessibilityNodeInfo, targets: List<WordConfig>) {
-                  for (cfg in targets) {
-                      val nodes = root.findAccessibilityNodeInfosByText(cfg.word) ?: continue
-                      val node = nodes.firstOrNull { it.text?.contains(cfg.word, true) == true } ?: continue
-                      val b = Rect(); node.getBoundsInScreen(b)
-                      if (b.isEmpty) { node.recycle(); continue }
-                      log("🖱️ Klik '${cfg.word}'")
-                      doClick(cfg, b.centerX().toFloat(), b.centerY().toFloat())
-                      node.recycle()
-                      Thread.sleep(prefs.getInt("delay_ms", 500).toLong())
+
+              override fun onInterrupt() {}
+
+              override fun onDestroy() {
+                  try {
+                      unregisterReceiver(configReceiver)
+                  } catch (_: Exception) {}
+
+                  log("🛑 Service berhenti")
+              }
+
+              private val configReceiver = object : BroadcastReceiver() {
+                  override fun onReceive(context: Context?, intent: Intent?) {
+                      log("⚙️ Config update")
                   }
               }
-              private fun doClick(cfg: WordConfig, cx: Float, cy: Float) {
-                  if (cfg.clickAbove) click(cx, cy - cfg.offsetAbove)
-                  if (cfg.clickOnWord) click(cx, cy + prefs.getInt("offset_on_word", 0))
-              }
-              private fun click(x: Float, y: Float) {
-                 try {
-                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
 
-                     val p = Path().apply { moveTo(x, y) }
-                     val g = GestureDescription.Builder()
-                     .addStroke(GestureDescription.StrokeDescription(p, 0, 50))
-                     .build()
-
-                  dispatchGesture(g, null, null)
-                     } catch (e: Exception) {
-                        e.printStackTrace()
-                 }
-            }
-              private fun loadConfig() {
-                  clickMode = if (prefs.getString("click_mode","PRIORITY") == "PRIORITY") ClickMode.PRIORITY else ClickMode.CLICK_ALL
-                  wordList.clear()
-                  val arr = JSONArray(prefs.getString("word_list","[]") ?: "[]")
-                  for (i in 0 until arr.length()) {
-                      val o = arr.getJSONObject(i)
-                      wordList.add(WordConfig(o.getString("word"), o.getBoolean("enabled"), o.optBoolean("clickAbove",true), o.optBoolean("clickOnWord",false), o.optInt("offsetAbove",80)))
-                  }
-                  log("📋 ${wordList.size} kata. Mode: ${if(clickMode==ClickMode.PRIORITY)"Prioritas" else "Klik Semua"}")
+              private fun log(msg: String) {
+                  logCallback?.invoke("[${sdf.format(Date())}] $msg")
               }
-              private fun log(msg: String) { logCallback?.invoke("[${sdf.format(Date())}] $msg") }
           }
           ENDOFFILE
 
