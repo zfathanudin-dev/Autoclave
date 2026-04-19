@@ -97,6 +97,13 @@ jobs:
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           ENDOFFILE
+          
+      - name: Tulis gradle.properties
+        run: |
+          cat > gradle.properties << 'ENDOFFILE'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          ENDOFFILE
 
       - name: Tulis AndroidManifest.xml
         run: |
