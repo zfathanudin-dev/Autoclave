@@ -462,15 +462,29 @@ jobs:
                   override fun onReceive(ctx: Context?, intent: Intent?) { loadConfig(); log("⚙️ Config diperbarui") }
               }
               override fun onServiceConnected() {
+              override fun onServiceConnected() {
                   prefs = getSharedPreferences("WordClickerPrefs", Context.MODE_PRIVATE)
+                 // 🔥 delay biar gak crash
+                 handler.postDelayed({
+                   try {
+                       loadConfig()
+                     log("✅ Service aktif (delayed)")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+               }
+            }, 1000)
 
-                  handler.postDelayed({
-                     loadConfig()
-                  log("✅ Service aktif")
-                  }, 500)
-
-                  registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
-              }
+            // 🔥 FIX Android 13+
+               if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+               registerReceiver(
+               configReceiver,
+               IntentFilter("com.wordclicker.UPDATE_CONFIG"),
+               RECEIVER_NOT_EXPORTED
+                 )
+                  } else {
+               registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
+            }
+          }
               override fun onDestroy() { try { unregisterReceiver(configReceiver) } catch (_: Exception) {}; log("🛑 Service berhenti") }
               override fun onInterrupt() {}
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -494,10 +508,8 @@ jobs:
 
               handler.post {
                       try {
-                          if (clickMode == ClickMode.PRIORITY)
-                            scanPriority(root, enabled)
-                     else
-                            scanAll(root, enabled)
+                          // disable sementara biar gak crash
+                          log("🧪 Service jalan tanpa scan")
                    } catch (e: Exception) {
                           e.printStackTrace()
                    } finally {
