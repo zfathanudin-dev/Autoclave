@@ -540,7 +540,13 @@ jobs:
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
                   try {
                       if (event == null) return
-                      log("🧪 Event masuk: ${event.eventType}")
+                      val root = rootInActiveWindow ?: return
+
+                      val nodes = root.findAccessibilityNodeInfosByText("test")
+
+                      if (!nodes.isNullOrEmpty()) {
+                         log("🔥 Ketemu kata 'test'")
+                      }
                   } catch (e: Exception) {
                       e.printStackTrace()
                   }
