@@ -85,16 +85,18 @@ jobs:
                   applicationId "com.wordclicker"
                   minSdk 24
                   targetSdk 34
-                  versionCode 5
-                  versionName "5.0-Flexible"
+                  versionCode 6
+                  versionName "6.0-Fix"
               }
               
               buildTypes {
                   release { 
                       minifyEnabled false
+                      shrinkResources false
                   }
                   debug {
                       debuggable true
+                      minifyEnabled false
                   }
               }
               
@@ -118,7 +120,7 @@ jobs:
           }
           EOF
 
-      - name: AndroidManifest.xml
+      - name: AndroidManifest.xml - FIXED
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -136,7 +138,8 @@ jobs:
                   android:allowBackup="true"
                   android:label="@string/app_name"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+                  android:enabled="true">
 
                   <activity 
                       android:name=".MainActivity" 
@@ -148,9 +151,11 @@ jobs:
                       </intent-filter>
                   </activity>
 
+                  <!-- FIXED: Accessibility Service dengan exported="false" dan enabled="true" -->
                   <service
-                      android:name=".ClickerAccessibilityService"
-                      android:exported="true"
+                      android:name="com.wordclicker.ClickerAccessibilityService"
+                      android:enabled="true"
+                      android:exported="false"
                       android:label="@string/accessibility_service_label"
                       android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
                       <intent-filter>
@@ -162,7 +167,8 @@ jobs:
                   </service>
 
                   <service
-                      android:name=".ScreenCaptureService"
+                      android:name="com.wordclicker.ScreenCaptureService"
+                      android:enabled="true"
                       android:exported="false"
                       android:foregroundServiceType="mediaProjection"/>
 
@@ -177,17 +183,18 @@ jobs:
           <resources>
               <string name="app_name">Growtopia AutoClicker</string>
               <string name="accessibility_service_label">Growtopia AutoClicker</string>
-              <string name="accessibility_service_description">Auto click fleksibel: atas/pada/bawah teks</string>
+              <string name="accessibility_service_description">Auto click untuk Growtopia dengan deteksi teks item</string>
           </resources>
           EOF
 
-      - name: accessibility_service_config.xml
+      - name: accessibility_service_config.xml - IMPROVED
         run: |
           cat > app/src/main/res/xml/accessibility_service_config.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
               android:accessibilityEventTypes="typeAllMask"
               android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
               android:canPerformGestures="true"
               android:canRetrieveWindowContent="true"
               android:notificationTimeout="100"
@@ -238,15 +245,18 @@ jobs:
           enum class ClickMode { PRIORITY, CLICK_ALL }
           '''
 
-          # === ClickerAccessibilityService.kt ===
+          # === ClickerAccessibilityService.kt - IMPROVED ===
           files["app/src/main/java/com/wordclicker/ClickerAccessibilityService.kt"] = '''
           package com.wordclicker
 
           import android.accessibilityservice.AccessibilityService
+          import android.accessibilityservice.AccessibilityServiceInfo
           import android.accessibilityservice.GestureDescription
+          import android.content.Intent
           import android.graphics.Path
           import android.os.Build
           import android.view.accessibility.AccessibilityEvent
+          import android.view.accessibility.AccessibilityNodeInfo
           import kotlin.random.Random
 
           class ClickerAccessibilityService : AccessibilityService() {
@@ -278,6 +288,9 @@ jobs:
                                   lastClickTime = System.currentTimeMillis()
                                   onDone?.invoke() 
                               }
+                              override fun onCancelled(g: GestureDescription) {
+                                  // Click cancelled, try again
+                              }
                           }, null)
                       }, totalDelay)
                   }
@@ -286,17 +299,41 @@ jobs:
               }
 
               override fun onServiceConnected() {
+                  super.onServiceConnected()
                   instance = this
-                  ScreenCaptureService.log("Accessibility aktif")
+                  
+                  // Configure service info
+                  serviceInfo = AccessibilityServiceInfo().apply {
+                      eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or 
+                                  AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                                  AccessibilityEvent.TYPE_VIEW_CLICKED
+                      feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+                      flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                              AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                      notificationTimeout = 100
+                  }
+                  
+                  ScreenCaptureService.log("Accessibility Service Connected")
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  // Keep service running
+                  return START_STICKY
               }
 
               override fun onDestroy() {
                   instance = null
-                  ScreenCaptureService.log("Accessibility berhenti")
+                  ScreenCaptureService.log("Accessibility Service Destroyed")
+                  super.onDestroy()
               }
 
-              override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-              override fun onInterrupt() {}
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  // Handle events if needed
+              }
+              
+              override fun onInterrupt() {
+                  // Service interrupted
+              }
           }
           '''
 
@@ -365,7 +402,7 @@ jobs:
               private val configReceiver = object : BroadcastReceiver() {
                   override fun onReceive(ctx: Context?, intent: Intent?) {
                       loadConfig()
-                      log("Config diperbarui")
+                      log("Config updated")
                   }
               }
 
@@ -374,11 +411,12 @@ jobs:
                   instance = this
                   createNotificationChannel()
                   loadConfig()
+                  
+                  val filter = IntentFilter("com.wordclicker.UPDATE_CONFIG")
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                      registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"), RECEIVER_NOT_EXPORTED)
+                      registerReceiver(configReceiver, filter, RECEIVER_NOT_EXPORTED)
                   } else {
-                      @Suppress("UnspecifiedRegisterReceiverFlag")
-                      registerReceiver(configReceiver, IntentFilter("com.wordclicker.UPDATE_CONFIG"))
+                      registerReceiver(configReceiver, filter)
                   }
               }
 
@@ -393,7 +431,7 @@ jobs:
                       }
                       ACTION_STOP -> stopCapture()
                   }
-                  return START_NOT_STICKY
+                  return START_STICKY
               }
 
               private fun startCapture(resultCode: Int, resultData: Intent) {
@@ -426,7 +464,7 @@ jobs:
 
                   isRunning = true
                   isScanning = false
-                  log("Scan dimulai (" + screenWidth + "x" + screenHeight + ")")
+                  log("Scan started (" + screenWidth + "x" + screenHeight + ")")
                   scheduleNextScan()
               }
 
@@ -441,7 +479,7 @@ jobs:
                   mediaProjection = null
                   stopForeground(STOP_FOREGROUND_REMOVE)
                   stopSelf()
-                  log("Scan dihentikan")
+                  log("Scan stopped")
               }
 
               private fun scheduleNextScan() {
@@ -499,7 +537,7 @@ jobs:
                           }
                   } catch (e: Exception) {
                       try { image.close() } catch (_: Exception) {}
-                      log("Error: " + e.message)
+                      log("Capture error: " + e.message)
                       isScanning = false
                       scheduleNextScan()
                   }
@@ -524,11 +562,11 @@ jobs:
                                       found.add(Found(cfg, cx, clickY, textCenterY, priority))
                                       
                                       val posDesc = when {
-                                          cfg.offsetY < 0 -> "di ATAS"
-                                          cfg.offsetY > 0 -> "di BAWAH"
-                                          else -> "PADA"
+                                          cfg.offsetY < 0 -> "ABOVE"
+                                          cfg.offsetY > 0 -> "BELOW"
+                                          else -> "ON"
                                       }
-                                      log(cfg.itemName + " " + posDesc + " (" + cx.toInt() + ", " + clickY.toInt() + ") [teks: " + detectedText + "]")
+                                      log(cfg.itemName + " " + posDesc + " (" + cx.toInt() + "," + clickY.toInt() + ") [" + detectedText + "]")
                                   }
                               }
                           }
@@ -538,7 +576,7 @@ jobs:
                   if (found.isEmpty()) return
 
                   if (!ClickerAccessibilityService.isAvailable()) {
-                      log("Accessibility belum aktif!")
+                      log("WARNING: Accessibility not available!")
                       return
                   }
 
@@ -546,24 +584,24 @@ jobs:
                       ClickMode.PRIORITY -> {
                           val best = found.minByOrNull { it.priority } ?: return
                           val posDesc = when {
-                              best.config.offsetY < 0 -> "atas"
-                              best.config.offsetY > 0 -> "bawah"
-                              else -> "pada"
+                              best.config.offsetY < 0 -> "above"
+                              best.config.offsetY > 0 -> "below"
+                              else -> "on"
                           }
-                          log("Klik " + best.config.itemName + " " + posDesc)
+                          log("Click " + best.config.itemName + " " + posDesc)
                           ClickerAccessibilityService.performClick(best.cx, best.cy, best.config.randomDelay) {
-                              log("Klik sukses")
+                              log("Click success")
                           }
                       }
                       ClickMode.CLICK_ALL -> {
                           val sorted = found.sortedBy { it.priority }.distinctBy { "" + it.cx.toInt() + "," + it.cy.toInt() }
                           for (f in sorted.take(4)) {
                               val posDesc = when {
-                                  f.config.offsetY < 0 -> "atas"
-                                  f.config.offsetY > 0 -> "bawah"
-                                  else -> "pada"
+                                  f.config.offsetY < 0 -> "above"
+                                  f.config.offsetY > 0 -> "below"
+                                  else -> "on"
                               }
-                              log("Klik " + f.config.itemName + " " + posDesc)
+                              log("Click " + f.config.itemName + " " + posDesc)
                               ClickerAccessibilityService.performClick(f.cx, f.cy, f.config.randomDelay)
                               Thread.sleep(Random.nextLong(250, 500))
                           }
@@ -580,8 +618,16 @@ jobs:
                   
                   val jsonStr = prefs.getString("item_list", "")
                   if (jsonStr.isNullOrEmpty()) {
-                      itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
-                      itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                      // Default items for Autoclave
+                      itemList.add(ItemConfig("Clamp", true, -40, 0))
+                      itemList.add(ItemConfig("Transfusion", true, -40, 1))
+                      itemList.add(ItemConfig("Scalpel", true, -40, 2))
+                      itemList.add(ItemConfig("Stitches", true, -40, 3))
+                      itemList.add(ItemConfig("Ultrasound", true, -40, 4))
+                      itemList.add(ItemConfig("Anesthetic", true, -40, 5))
+                      itemList.add(ItemConfig("Defibrillator", true, -40, 6))
+                      itemList.add(ItemConfig("Splint", true, -40, 7))
+                      itemList.add(ItemConfig("Pin", true, -40, 8))
                   } else {
                       try {
                           val arr = JSONArray(jsonStr)
@@ -590,31 +636,32 @@ jobs:
                               itemList.add(ItemConfig(
                                   itemName = o.getString("itemName"),
                                   enabled = o.optBoolean("enabled", true),
-                                  offsetY = o.optInt("offsetY", -60),
+                                  offsetY = o.optInt("offsetY", -40),
                                   priority = o.optInt("priority", i),
                                   randomDelay = o.optBoolean("randomDelay", true)
                               ))
                           }
                       } catch (e: Exception) {
-                          itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
-                          itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                          itemList.add(ItemConfig("Clamp", true, -40, 0))
                       }
                   }
-                  log(itemList.count { it.enabled }.toString() + " item, interval: " + scanIntervalMs + "ms")
+                  log(itemList.count { it.enabled }.toString() + " items loaded")
               }
 
               private fun buildNotification(): Notification {
                   return NotificationCompat.Builder(this, CHANNEL_ID)
                       .setContentTitle("Growtopia AutoClicker")
-                      .setContentText("Memindai...")
+                      .setContentText("Scanning for items...")
                       .setSmallIcon(android.R.drawable.ic_menu_search)
                       .setPriority(NotificationCompat.PRIORITY_LOW)
+                      .setOngoing(true)
                       .build()
               }
 
               private fun createNotificationChannel() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       val ch = NotificationChannel(CHANNEL_ID, "Growtopia Clicker", NotificationManager.IMPORTANCE_LOW)
+                      ch.setShowBadge(false)
                       (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
                   }
               }
@@ -673,11 +720,11 @@ jobs:
                   h.seekOffset.progress = progress.coerceIn(0, 400)
                   
                   val posText = when {
-                      item.offsetY < 0 -> "di ATAS " + kotlin.math.abs(item.offsetY) + "px"
-                      item.offsetY > 0 -> "di BAWAH " + item.offsetY + "px"
-                      else -> "PADA teks"
+                      item.offsetY < 0 -> "Click ABOVE " + kotlin.math.abs(item.offsetY) + "px"
+                      item.offsetY > 0 -> "Click BELOW " + item.offsetY + "px"
+                      else -> "Click ON text"
                   }
-                  h.tvOffset.text = "Klik " + posText
+                  h.tvOffset.text = posText
                   
                   h.btnUp.alpha = if (pos == 0) 0.3f else 1f
                   h.btnDn.alpha = if (pos == items.size - 1) 0.3f else 1f
@@ -691,11 +738,11 @@ jobs:
                       override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
                           val offset = v - 200
                           val posDesc = when {
-                              offset < 0 -> "di ATAS " + kotlin.math.abs(offset) + "px"
-                              offset > 0 -> "di BAWAH " + offset + "px"
-                              else -> "PADA teks"
+                              offset < 0 -> "Click ABOVE " + kotlin.math.abs(offset) + "px"
+                              offset > 0 -> "Click BELOW " + offset + "px"
+                              else -> "Click ON text"
                           }
-                          h.tvOffset.text = "Klik " + posDesc
+                          h.tvOffset.text = posDesc
                           if (u) items[h.adapterPosition] = items[h.adapterPosition].copy(offsetY = offset)
                       }
                       override fun onStartTrackingTouch(s: SeekBar?) {}
@@ -791,7 +838,7 @@ jobs:
                           else
                               startService(intent)
                       } else {
-                          Toast.makeText(this, "Izin ditolak", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
                       }
                   }
 
@@ -825,8 +872,9 @@ jobs:
 
                   ScreenCaptureService.logCallback = { msg ->
                       runOnUiThread {
-                          val lines = tvLog.text.toString().split("\\n").takeLast(50)
-                          tvLog.text = (lines + msg).joinToString("\\n")
+                          val current = tvLog.text.toString()
+                          val lines = if (current.length > 2000) current.substring(current.length - 2000) else current
+                          tvLog.text = lines + "\\n" + msg
                       }
                   }
               }
@@ -838,8 +886,8 @@ jobs:
               }
 
               private fun loadSettings() {
-                  seekOffset.progress = 140
-                  updateOffsetText(140)
+                  seekOffset.progress = 160  // Default -40px (160-200)
+                  updateOffsetText(160)
                   etScanInterval.setText(prefs.getInt("scan_interval_ms", 1200).toString())
                   swAntiBan.isChecked = prefs.getBoolean("anti_ban_mode", true)
                   
@@ -852,8 +900,17 @@ jobs:
                   itemList.clear()
                   
                   if (jsonStr.isNullOrEmpty()) {
-                      itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
-                      itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                      // Default surgical tools for Autoclave
+                      itemList.add(ItemConfig("Clamp", true, -40, 0))
+                      itemList.add(ItemConfig("Transfusion", true, -40, 1))
+                      itemList.add(ItemConfig("Scalpel", true, -40, 2))
+                      itemList.add(ItemConfig("Stitches", true, -40, 3))
+                      itemList.add(ItemConfig("Ultrasound", true, -40, 4))
+                      itemList.add(ItemConfig("Anesthetic", true, -40, 5))
+                      itemList.add(ItemConfig("Defibrillator", true, -40, 6))
+                      itemList.add(ItemConfig("Splint", true, -40, 7))
+                      itemList.add(ItemConfig("Pin", true, -40, 8))
+                      saveSettings() // Save defaults
                   } else {
                       try {
                           val arr = JSONArray(jsonStr)
@@ -862,14 +919,13 @@ jobs:
                               itemList.add(ItemConfig(
                                   itemName = o.getString("itemName"),
                                   enabled = o.optBoolean("enabled", true),
-                                  offsetY = o.optInt("offsetY", -60),
+                                  offsetY = o.optInt("offsetY", -40),
                                   priority = o.optInt("priority", i),
                                   randomDelay = o.optBoolean("randomDelay", true)
                               ))
                           }
                       } catch (e: Exception) {
-                          itemList.add(ItemConfig("Diamond_Lock", true, -60, 0))
-                          itemList.add(ItemConfig("World_Lock", true, -55, 1))
+                          itemList.add(ItemConfig("Clamp", true, -40, 0))
                       }
                   }
               }
@@ -877,9 +933,9 @@ jobs:
               private fun updateOffsetText(progress: Int) {
                   val offset = progress - 200
                   val text = when {
-                      offset < 0 -> "Klik di ATAS teks " + kotlin.math.abs(offset) + "px"
-                      offset > 0 -> "Klik di BAWAH teks " + offset + "px"
-                      else -> "Klik PADA teks (0px)"
+                      offset < 0 -> "Click ABOVE text " + kotlin.math.abs(offset) + "px"
+                      offset > 0 -> "Click BELOW text " + offset + "px"
+                      else -> "Click ON text (0px)"
                   }
                   tvOffset.text = text
               }
@@ -916,7 +972,7 @@ jobs:
               private fun setupListeners() {
                   btnAccess.setOnClickListener {
                       startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                      Toast.makeText(this, "Cari 'Growtopia AutoClicker'", Toast.LENGTH_LONG).show()
+                      Toast.makeText(this, "Find 'Growtopia AutoClicker' and enable it", Toast.LENGTH_LONG).show()
                   }
 
                   btnCapture.setOnClickListener {
@@ -927,7 +983,7 @@ jobs:
                           Handler(Looper.getMainLooper()).postDelayed({ updateCaptureStatus() }, 500)
                       } else {
                           if (!isAccessibilityEnabled()) {
-                              Toast.makeText(this, "Aktifkan Accessibility dulu!", Toast.LENGTH_LONG).show()
+                              Toast.makeText(this, "Enable Accessibility Service first!", Toast.LENGTH_LONG).show()
                               return@setOnClickListener
                           }
                           val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -938,11 +994,11 @@ jobs:
                   btnAdd.setOnClickListener {
                       val name = etItem.text.toString().trim().replace(" ", "_")
                       if (name.isEmpty()) { 
-                          etItem.error = "Masukkan nama item"
+                          etItem.error = "Enter item name"
                           return@setOnClickListener 
                       }
                       if (itemList.any { it.itemName.equals(name, true) }) { 
-                          Toast.makeText(this, "Item sudah ada!", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Item already exists!", Toast.LENGTH_SHORT).show()
                           return@setOnClickListener 
                       }
                       val offset = seekOffset.progress - 200
@@ -974,28 +1030,29 @@ jobs:
 
               private fun isAccessibilityEnabled(): Boolean {
                   val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
-                  return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-                      .any { it.id.contains("wordclicker", true) }
+                  val services = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                  val found = services.any { it.id.contains("wordclicker", true) || it.id.contains("growtopia", true) }
+                  return found
               }
 
               private fun updateAccessStatus() {
                   val on = isAccessibilityEnabled()
                   indicatorAccess.backgroundTintList = ContextCompat.getColorStateList(this, 
                       if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
-                  tvAccessStatus.text = if (on) "Aktif" else "Tidak Aktif"
+                  tvAccessStatus.text = if (on) "Active" else "Inactive"
                   tvAccessStatus.setTextColor(ContextCompat.getColor(this, 
                       if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
-                  btnAccess.text = if (on) "Kelola" else "Aktifkan"
+                  btnAccess.text = if (on) "Manage" else "Enable"
               }
 
               private fun updateCaptureStatus() {
                   val on = ScreenCaptureService.isRunning
                   indicatorCapture.backgroundTintList = ContextCompat.getColorStateList(this, 
                       if (on) android.R.color.holo_green_light else android.R.color.holo_red_light)
-                  tvCaptureStatus.text = if (on) "Berjalan" else "Berhenti"
+                  tvCaptureStatus.text = if (on) "Running" else "Stopped"
                   tvCaptureStatus.setTextColor(ContextCompat.getColor(this, 
                       if (on) android.R.color.holo_green_dark else android.R.color.holo_red_dark))
-                  btnCapture.text = if (on) "Stop" else "Mulai Scan"
+                  btnCapture.text = if (on) "Stop" else "Start Scan"
                   btnCapture.backgroundTintList = ContextCompat.getColorStateList(this, 
                       if (on) android.R.color.holo_red_light else android.R.color.holo_green_light)
               }
@@ -1016,7 +1073,7 @@ jobs:
                   android:textSize="24sp" android:textStyle="bold" android:gravity="center"
                   android:paddingTop="16dp" android:paddingBottom="4dp"/>
               <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                  android:text="Flexible Offset: Atas / Pada / Bawah Teks"
+                  android:text="For Autoclave Surgery Tools"
                   android:textColor="#888888" android:textSize="12sp" android:gravity="center"
                   android:paddingBottom="16dp"/>
 
@@ -1027,17 +1084,17 @@ jobs:
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 1 - Accessibility Service" android:textColor="#00C853"
+                      android:text="STEP 1 - Enable Accessibility" android:textColor="#00C853"
                       android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical">
                     <View android:id="@+id/indicatorAccess" android:layout_width="12dp" android:layout_height="12dp"
                         android:background="@drawable/circle_indicator"/>
                     <TextView android:id="@+id/tvAccessStatus" android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Tidak Aktif" android:textColor="#FF4444"
+                        android:layout_weight="1" android:text="Inactive" android:textColor="#FF4444"
                         android:textSize="14sp" android:paddingStart="8dp"/>
                     <Button android:id="@+id/btnToggleAccess" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:text="Aktifkan"
+                        android:layout_height="wrap_content" android:text="Enable"
                         android:backgroundTint="#00C853" android:textColor="#000000" android:textSize="12sp" android:textStyle="bold"/>
                   </LinearLayout>
                 </LinearLayout>
@@ -1050,17 +1107,17 @@ jobs:
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="STEP 2 - Screen Capture" android:textColor="#00C853"
+                      android:text="STEP 2 - Start Screen Capture" android:textColor="#00C853"
                       android:textSize="12sp" android:textStyle="bold" android:paddingBottom="10dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical">
                     <View android:id="@+id/indicatorCapture" android:layout_width="12dp" android:layout_height="12dp"
                         android:background="@drawable/circle_indicator"/>
                     <TextView android:id="@+id/tvCaptureStatus" android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Berhenti" android:textColor="#FF4444"
+                        android:layout_weight="1" android:text="Stopped" android:textColor="#FF4444"
                         android:textSize="14sp" android:paddingStart="8dp"/>
                     <Button android:id="@+id/btnToggleCapture" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:text="Mulai Scan"
+                        android:layout_height="wrap_content" android:text="Start Scan"
                         android:backgroundTint="#00C853" android:textColor="#000000" android:textSize="12sp" android:textStyle="bold"/>
                   </LinearLayout>
                 </LinearLayout>
@@ -1073,15 +1130,15 @@ jobs:
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Mode Klik" android:textColor="#00C853"
+                      android:text="Click Mode" android:textColor="#00C853"
                       android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
                   <RadioGroup android:id="@+id/rgClickMode" android:layout_width="match_parent"
                       android:layout_height="wrap_content" android:orientation="vertical">
                     <RadioButton android:id="@+id/rbPriority" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Prioritas - item urutan teratas"
+                        android:layout_height="wrap_content" android:text="Priority - click highest priority item only"
                         android:textColor="#FFFFFF" android:textSize="13sp" android:checked="true" android:buttonTint="#00C853"/>
                     <RadioButton android:id="@+id/rbClickAll" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Klik Semua - semua item terdeteksi"
+                        android:layout_height="wrap_content" android:text="Click All - click all detected items"
                         android:textColor="#FFFFFF" android:textSize="13sp" android:buttonTint="#00C853"/>
                   </RadioGroup>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -1094,52 +1151,52 @@ jobs:
                 </LinearLayout>
               </androidx.cardview.widget.CardView>
 
-              <!-- Tambah Item -->
+              <!-- Add Item -->
               <androidx.cardview.widget.CardView android:layout_width="match_parent"
                   android:layout_height="wrap_content" android:layout_marginBottom="12dp"
                   app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Tambah Item Baru" android:textColor="#00C853"
+                      android:text="Add New Item" android:textColor="#00C853"
                       android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
                   <EditText android:id="@+id/etNewWord" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:hint="Nama item (contoh: Diamond_Lock)"
+                      android:layout_height="wrap_content" android:hint="Item name (e.g., Clamp)"
                       android:textColor="#FFFFFF" android:textColorHint="#666666" android:inputType="text"/>
                   
                   <TextView android:id="@+id/tvOffsetAbove" android:layout_width="wrap_content"
-                      android:layout_height="wrap_content" android:text="Klik di ATAS teks 60px"
+                      android:layout_height="wrap_content" android:text="Click ABOVE text 40px"
                       android:textColor="#888888" android:textSize="12sp" android:paddingTop="12dp"/>
                   <SeekBar android:id="@+id/seekOffsetAbove" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:max="400" android:progress="140"/>
+                      android:layout_height="wrap_content" android:max="400" android:progress="160"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:paddingTop="4dp">
                       <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                          android:text="Atas" android:textColor="#666666" android:textSize="10sp"/>
+                          android:text="Above" android:textColor="#666666" android:textSize="10sp"/>
                       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                          android:text="Teks" android:textColor="#00C853" android:textSize="10sp"/>
+                          android:text="Text" android:textColor="#00C853" android:textSize="10sp"/>
                       <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                          android:text="Bawah" android:textColor="#666666" android:textSize="10sp" android:gravity="end"/>
+                          android:text="Below" android:textColor="#666666" android:textSize="10sp" android:gravity="end"/>
                   </LinearLayout>
                   
                   <Button android:id="@+id/btnAddWord" android:layout_width="match_parent"
-                      android:layout_height="wrap_content" android:text="Tambah Item"
+                      android:layout_height="wrap_content" android:text="ADD ITEM"
                       android:backgroundTint="#00C853" android:textColor="#000000" 
                       android:textStyle="bold" android:layout_marginTop="12dp"/>
                 </LinearLayout>
               </androidx.cardview.widget.CardView>
 
-              <!-- Daftar Item -->
+              <!-- Item List -->
               <androidx.cardview.widget.CardView android:layout_width="match_parent"
                   android:layout_height="wrap_content" android:layout_marginBottom="12dp"
                   app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Daftar Item (Urutan = Prioritas)" android:textColor="#00C853"
+                      android:text="Item List (Order = Priority)" android:textColor="#00C853"
                       android:textSize="13sp" android:textStyle="bold" android:paddingBottom="8dp"/>
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Tap seekbar untuk atur: atas/pada/bawah teks"
+                      android:text="Drag seekbar: above/on/below text"
                       android:textColor="#666666" android:textSize="11sp" android:paddingBottom="8dp"/>
                   <androidx.recyclerview.widget.RecyclerView android:id="@+id/rvWordList"
                       android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -1147,25 +1204,25 @@ jobs:
                 </LinearLayout>
               </androidx.cardview.widget.CardView>
 
-              <!-- Pengaturan -->
+              <!-- Settings -->
               <androidx.cardview.widget.CardView android:layout_width="match_parent"
                   android:layout_height="wrap_content" android:layout_marginBottom="12dp"
                   app:cardBackgroundColor="#1A1D27" app:cardCornerRadius="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:padding="16dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Pengaturan Scan" android:textColor="#00C853"
+                      android:text="Scan Settings" android:textColor="#00C853"
                       android:textSize="13sp" android:textStyle="bold" android:paddingBottom="12dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Interval scan (ms)" android:textColor="#CCCCCC"/>
+                        android:layout_weight="1" android:text="Scan interval (ms)" android:textColor="#CCCCCC"/>
                     <EditText android:id="@+id/etScanInterval" android:layout_width="100dp"
                         android:layout_height="wrap_content" android:text="1200"
                         android:textColor="#FFFFFF" android:inputType="number" android:gravity="center"/>
                   </LinearLayout>
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                      android:text="Tip: 1000-1500ms lebih aman, 500-800ms lebih cepat"
+                      android:text="Tip: 1000-1500ms safer, 500-800ms faster"
                       android:textColor="#666666" android:textSize="11sp" android:paddingTop="4dp"/>
                 </LinearLayout>
               </androidx.cardview.widget.CardView>
@@ -1178,7 +1235,7 @@ jobs:
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Log Aktivitas" android:textColor="#00C853"
+                        android:layout_weight="1" android:text="Activity Log" android:textColor="#00C853"
                         android:textSize="13sp" android:textStyle="bold"/>
                     <Button android:id="@+id/btnClearLog" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="Clear"
@@ -1187,7 +1244,7 @@ jobs:
                   <ScrollView android:layout_width="match_parent" android:layout_height="200dp"
                       android:background="#0A0C12" android:padding="8dp">
                     <TextView android:id="@+id/tvLog" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:text="Siap..."
+                        android:layout_height="wrap_content" android:text="Ready..."
                         android:textColor="#00C853" android:textSize="11sp" android:fontFamily="monospace"/>
                   </ScrollView>
                 </LinearLayout>
@@ -1220,18 +1277,18 @@ jobs:
                   android:textSize="14sp" android:padding="0dp" android:layout_marginStart="4dp"/>
             </LinearLayout>
             <TextView android:id="@+id/tvItemOffset" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="Klik di ATAS teks 60px"
+                android:layout_height="wrap_content" android:text="Click ABOVE text 40px"
                 android:textColor="#00C853" android:textSize="12sp" android:paddingTop="8dp"/>
             <SeekBar android:id="@+id/seekItemOffset" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:max="400" android:progress="140"/>
+                android:layout_height="wrap_content" android:max="400" android:progress="160"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:paddingTop="2dp">
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                    android:text="Atas" android:textColor="#666666" android:textSize="9sp"/>
+                    android:text="Above" android:textColor="#666666" android:textSize="9sp"/>
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Teks" android:textColor="#888888" android:textSize="9sp"/>
+                    android:text="Text" android:textColor="#888888" android:textSize="9sp"/>
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                    android:text="Bawah" android:textColor="#666666" android:textSize="9sp" android:gravity="end"/>
+                    android:text="Below" android:textColor="#666666" android:textSize="9sp" android:gravity="end"/>
             </LinearLayout>
           </LinearLayout>'''
 
@@ -1239,7 +1296,7 @@ jobs:
               os.makedirs(os.path.dirname(path), exist_ok=True)
               with open(path, "w") as f:
                   f.write(content)
-              print(f"Created: {path}")
+              print("Created: " + path)
           PYEOF
 
       - name: Download Gradle wrapper
@@ -1265,6 +1322,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GrowtopiaAutoClicker-v5-Flexible
+          name: GrowtopiaAutoClicker-v6-Fix
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
