@@ -47,9 +47,9 @@ jobs:
         run: |
           cat > build.gradle << 'ENDOFFILE'
           plugins {
-              id 'com.android.application' version '8.2.0' apply false
-              id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
-          }
+             id 'com.android.application' version '8.1.1' apply false
+             id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
+              }
           ENDOFFILE
 
       - name: Tulis app/build.gradle
@@ -79,13 +79,13 @@ jobs:
               kotlinOptions { jvmTarget = '1.8' }
           }
           dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.cardview:cardview:1.0.0'
-              implementation 'androidx.recyclerview:recyclerview:1.3.2'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
+               implementation 'androidx.core:core-ktx:1.10.1'
+               implementation 'androidx.appcompat:appcompat:1.6.1'
+               implementation 'com.google.android.material:material:1.9.0'
+               implementation 'androidx.cardview:cardview:1.0.0'
+               implementation 'androidx.recyclerview:recyclerview:1.3.1'
+               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              }
           ENDOFFILE
 
       - name: Tulis gradle-wrapper.properties
@@ -682,7 +682,10 @@ jobs:
           mkdir -p gradle/wrapper
           wget -q "https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar" \
                -O gradle/wrapper/gradle-wrapper.jar
-
+               
+      - name: Clean project
+        run: ./gradlew clean
+           
       - name: Build APK
         run: ./gradlew assembleDebug --no-daemon
 
