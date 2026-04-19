@@ -113,7 +113,6 @@ jobs:
               implementation 'com.google.android.material:material:1.9.0'
               implementation 'androidx.cardview:cardview:1.0.0'
               implementation 'androidx.recyclerview:recyclerview:1.3.1'
-              implementation 'com.google.mlkit:text-recognition:16.0.0'
           }
           EOF
 
@@ -324,9 +323,7 @@ jobs:
           import android.util.DisplayMetrics
           import android.view.WindowManager
           import androidx.core.app.NotificationCompat
-          import com.google.mlkit.vision.common.InputImage
-          import com.google.mlkit.vision.text.TextRecognition
-          import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+          import android.text.TextUtils
           import org.json.JSONArray
           import org.json.JSONObject
           import java.text.SimpleDateFormat
