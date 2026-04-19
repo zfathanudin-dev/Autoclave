@@ -473,6 +473,7 @@ jobs:
                     e.printStackTrace()
                }
             }, 1000)
+          }
 
             // 🔥 FIX Android 13+
                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
