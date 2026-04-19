@@ -355,7 +355,6 @@ jobs:
               private var virtualDisplay: VirtualDisplay? = null
               private var imageReader: ImageReader? = null
               private val handler = Handler(Looper.getMainLooper())
-              private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
               private var screenWidth = 1080
               private var screenHeight = 1920
               private var screenDensity = 1
