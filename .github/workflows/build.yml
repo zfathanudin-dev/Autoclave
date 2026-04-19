@@ -17,6 +17,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # ✅ FIX: tambah ini
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Buat folder
         run: |
           mkdir -p app/src/main/java/com/wordclicker
@@ -64,6 +68,114 @@ jobs:
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
+          EOF
+
+      - name: app/build.gradle
+        run: |
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.wordclicker'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.wordclicker"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 3
+                  versionName "3.0"
+              }
+              buildTypes {
+                  release { minifyEnabled false }
+              }
+              compileOptions {
+                  # ✅ FIX Java 17
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = '17' }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.10.1'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.cardview:cardview:1.0.0'
+              implementation 'androidx.recyclerview:recyclerview:1.3.1'
+              
+              # ✅ FIX ML Kit
+              implementation 'com.google.mlkit:text-recognition:16.0.1'
+          }
+          EOF
+
+      - name: AndroidManifest.xml
+        run: |
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
+              <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                  tools:ignore="ProtectedPermissions"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+              <application
+                  android:allowBackup="true"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".ClickerAccessibilityService"
+                      android:exported="true"
+                      android:label="@string/accessibility_service_label"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService"/>
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config"/>
+                  </service>
+
+                  <service
+                      android:name=".ScreenCaptureService"
+                      android:exported="false"
+                      android:foregroundServiceType="mediaProjection"/>
+
+              </application>
+          </manifest>
+          EOF
+
+      # 🔽 SEMUA STEP LAIN (Python, XML, Kotlin, dll)
+      # ❗ TIDAK DIUBAH SAMA SEKALI
+
+      - name: Download Gradle wrapper
+        run: |
+          wget -q https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradlew -O gradlew
+          chmod +x gradlew
+          wget -q "https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar" \
+               -O gradle/wrapper/gradle-wrapper.jar
+
+      - name: Build APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WordAutoClicker-v3-OCR
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30          zipStorePath=wrapper/dists
           EOF
 
       - name: app/build.gradle
